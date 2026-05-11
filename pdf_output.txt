@@ -1,0 +1,92 @@
+Packaging Machines & Materials Ads26,184 5,921 5,486 5,661 5,844 3.23%
+Metals & Alloys Ads30,829 1,546 2,006 2,206 2,275 3.13%
+Medical & Hospital Instruments Ads48,101 6,069 5,982 6,691 6,144 -8.18%
+Mechanical Components Ads52,101 4,494 5,460 5,711 5,791 1.40%
+Lab Instruments Ads36,191 3,839 3,947 3,906 4,098 4.92%
+Kitchen Utensils Ads2,929  324  482  733  494  -32.61%
+Industrial Plants, Machinery Ads197,818 15,904 18,033 19,401 20,273 4.49%
+Industrial & Engineering Products Ads69,257 8,487 9,147 9,750 9,903 1.57%
+Houseware & Supplies Ads5,086 2,429 1,830 1,873 1,948 4.00%
+Furniture & Supplies Ads7,827  720  621  706  813  15.16%
+Electronic Components Ads91,137 4,940 5,714 5,953 5,878 -1.26%
+Electrical Equipments and Supplies Ads51,193 7,136 7,385 8,033 8,536 6.26%
+Consumer Electronics Ads44,243 6,765 6,624 6,550 6,208 -5.22%
+Building & Construction Ads68,002 19,047 17,875 18,963 19,691 3.84%
+Group-wise Product Distribution
+Cost/Conversion >= ₹125774  3,271 2,939 2,899 2,685 -7.38%
+Cost/Conversion >= ₹100 & <125315  1,087  983  1,044  986  -5.56%
+Cost/Conversion >= ₹75 & <1002,817 1,755 1,571 1,704 1,542 -9.51%
+Cost/Conversion >= ₹50 & <754,547 2,679 2,630 2,827 2,454 -13.19%
+Cost/Conversion < ₹50965,182 158,195 159,129 160087 163,197 1.94%
+Cost/Conversion=0949,139 146,434 146,350 146,861 151,206 2.96%
+Products Bucketing based on Cost/Conversion
+High Conversion Products (Conv >10)1,829  969  1,029 1,101 1,027 -6.72%
+Low CTR Products (Clicks = 0, Impressions <50)55,528 75,417 80,568 74,401 81,004 8.87%
+High CTR (>5%) Products40,661 11,134 10,739 10,519 9,799 -6.84%
+Performance wise (Count of Products)
+others 569  2,416 2,564 3,283 3,955 20.47%
+Mismatched Value [Price] 641  1,479  506  642  409  -36.29%
+Product Paused113  5,885 11,694 9,440 9,288 -1.61%
+Mismatched Value 29   69   33   48   58   20.83%
+Text on Image131  124  125  126  116  -7.94%
+No Campaign Advertising Product41,811 50,771 48,162 47,084 43,939 -6.68%
+Not Eligible Products     43,866 57,227 59,757 57,710 54,974 -4.74%
+Google ads Feed Approval Rate    83.60% 65.72% 64.27% 65.76% 67.81% 3.12%
+Eligible Products on Google ads738,875 109,732 107,495 110,850 115,828 4.49%
+Total Products in Feed     972,877 166,959 167,253 168,560 170,802 1.33%
+Google ads Feed
+Merchant Center approval rate 98.29% 97.51% 98.00% 97.58% 97.27% -0.31%
+Not Eligible Products12,026 4,150 3,340 4,064 4,654 14.52%
+Eligible Products567,731 162,746 163,904 163,859 166,101 1.37%
+Total Products in Feed579,884 166,896 167,244 167,923 170,755 1.69%
+Merchant Center Feed
+Feed Health Summary     Best ever 29 Mar- 4 Apr5 Apr- 11 Apr12 Apr- 18 Apr19 Apr- 25 Apr%Change
+Report:
+HS MCA T in Product Ads is at   19,802
+Product with Cost/Conversion < ₹50 increased by               1.94% at  163,197
+Count of   Product with  High CTR (>5%) decreased  by 6.84% at   9,799
+Not Eligible product count increased by 4.74% at 54,974
+Feed Approval Rate decreased to          97.27%
+Total Count of products in the feed is 170755
+Highlights
+Sharing   below the weekly report covering          data on feed quality and ad performance improvement.
+Hi All,
+Cc: Abhishek Bhartia < abhishek@indiamart.com >, Mohit Bhavsar < mohit.bhavsar@indiamart.com >
+To: Google Ads Team <Ads@indiamart.com >, IM Reports <imReports@indiamart.com >
+Subject: Google Product  Ads Feed & Hygiene Report |Apr 19-  Apr 25, 2026
+Date: Tue, Apr 28, 2026 at 11:04 PM
+From: Nikhitha Sankarapu <nikhitha@indiamart.com >
+---------- Forwarded message ---------
+FYI
+To: Kratika Agarwal <kratika.agarwal@indiamart.com>
+Varun Asthana <varun.asthana@indiamart.com>                               Thu, Apr 30, 2026 at 5:09 PM
+Fwd: Google Product Ads Feed & Hygiene Report |Apr 19- Apr 25, 2026
+Kratika Agarwal <kratika.agarwal@indiamart.com>
+----------------Page (0) Break----------------
++91-9994117413   nikhitha@indiamart.com
+IndiaMAR T InterMESH Ltd.
+Manager
+Nikhitha Sankarapu
+Thanks & Regards
+Low BL MCATS 643  513  454  515  410  -20.39%
+Low Sold MCATS 2,248 2043  1998  2046  1872  -8.50%
+Medium Sold MCATS 2,686 2368  2308  2391  2180  -8.82%
+High SoldMCATS 12,843 11374 11018 11451 11035 -3.63%
+Converting MCATS Summary
+Low Transaction MCAT(<300% txn)157,408 32,873 36,350 33,250 33,857 1.83%
+Low MCAT(300-350% txn)77,966 17,414 16,649 17,207 18,361 6.71%
+Medium MCAT(350-400% txn)94,662 24,230 21,327 22,092 22,628 2.43%
+High MCAT(>400% TXn)647,788 91,564 91,655 94,597 94,631 0.04%
+Transaction wise Product Summary
+Low Transaction MCAT(<300% txn)8,235 8,232 8,185 8,187 8,022 -2.02%
+Low MCAT(300-350% txn)2,364 1,427 1,460 1,460 1,655 13.36%
+Medium MCAT(350-400% txn)3,889 2,456 2,476 2,476 2,510 1.37%
+High MCAT(>400% TXn)10,946 7,535 7,678 7,678 7,614 -0.83%
+Transaction wise MCAT Summary
+High sold MCAT - in Product Ads22,299 19,651 19,799 19,801 19,802 0.01%
+Total No of High Sold at IM 30,410 28,505 28,490 28,490 28,487 -0.01%
+MCAT wise Summary
+others 18,360 15,874 12,396 12,132 12,853 5.94%
+Tools - Machine Power & Hand Tools Ads3,295 2,568 2,098 2,115 2,262 6.95%
+Security Devices Ads24,182 2,757 2,804  388  479  23.45%
+----------------Page (1) Break----------------

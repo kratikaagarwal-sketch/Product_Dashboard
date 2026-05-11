@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || '1X91YEaBjTEM-pVnrAdsLmKSDavjHaB0_h-CNwJUOb-M';
-
-  // URL for public CSV export (Anyone with the link can view)
-  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`;
+  // Publicly published Google Sheet (File > Share > Publish to the web)
+  const url = process.env.MCAT_PAUSE_SHEET_URL ||
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRZX1p79Y_6Tf5P2rXbxIutAGemAG8HQhOTVF1L0U1fGUNC7fH0JVOeuqJXkH1Gku-PO6zJtg8hQqYB/pub?gid=0&single=true&output=csv';
 
   try {
     const response = await fetch(url);
@@ -13,10 +12,10 @@ export async function GET() {
       if (response.status === 401) {
         return NextResponse.json({ 
           success: false, 
-          error: 'Access Denied (401). Please ensure the spreadsheet is shared as "Anyone with the link can view" AND "Published to the web" (File > Share > Publish to web).' 
+          error: 'Access Denied (401). The sheet URL may be wrong or the sheet is not published publicly. Go to File → Share → Publish to the web and copy the CSV link.' 
         });
       }
-      throw new Error(`Google Sheets fetch failed: ${response.statusText}`);
+      throw new Error(`Google Sheets fetch failed: ${response.status} ${response.statusText}`);
     }
 
     const csvText = await response.text();
@@ -53,7 +52,7 @@ export async function GET() {
         pausedLong, 
         freqPaused: freqPaused.length > 0 ? freqPaused : pausedLong.slice(0, 10).map(r => ({ ...r, freq: Math.floor(Math.random() * 5) + 2 }))
       } 
-    });
+    }, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } });
   } catch (error: any) {
     console.error('Google Sheets API Error:', error);
     return NextResponse.json({ success: false, error: error.message });

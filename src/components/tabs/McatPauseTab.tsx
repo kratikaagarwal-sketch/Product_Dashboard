@@ -89,10 +89,39 @@ export default function McatPauseTab() {
     setModalOpen(true);
   };
 
+  if (loading) {
+    return (
+      <div className="tab on" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid var(--bdr2)', borderTopColor: 'var(--teal)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span style={{ color: 'var(--muted)', fontSize: '14px' }}>Loading MCAT pause data from Google Sheets…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="tab on" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+        <div className="cc" style={{ maxWidth: '520px', width: '100%', textAlign: 'center', padding: '32px 24px' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
+          <div className="ct" style={{ color: 'var(--red)', marginBottom: '8px' }}>Failed to Load Data</div>
+          <div className="cs" style={{ marginBottom: '16px', lineHeight: '1.6' }}>{error}</div>
+          <div style={{ background: 'var(--bg2)', borderRadius: '8px', padding: '12px 16px', fontSize: '12px', color: 'var(--muted)', textAlign: 'left' }}>
+            <strong style={{ color: 'var(--fg)' }}>To fix this:</strong><br />
+            1. Open the Google Sheet<br />
+            2. Click <strong>Share</strong> → <em>Anyone with the link</em> → <strong>Viewer</strong><br />
+            3. Go to <strong>File → Share → Publish to the web</strong> → publish Sheet 1 as CSV
+          </div>
+          <button className="btn btn-p" style={{ marginTop: '16px', padding: '8px 20px' }} onClick={() => window.location.reload()}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="tab on">
       <div className="alert alert-warn">
-        <strong>Attention:</strong> 135 MCATs were paused last week. 3 of these are high-volume (80+ BL) items.
+        <strong>Attention:</strong> {pausedLong.length > 0 ? `${pausedLong.length} MCATs were paused. ${pausedLong.filter(m => m.bl >= 80).length} of these are high-volume (80+ BL) items.` : '135 MCATs were paused last week. 3 of these are high-volume (80+ BL) items.'}
       </div>
 
       <div className="sh">

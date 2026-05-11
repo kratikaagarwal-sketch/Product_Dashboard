@@ -31,26 +31,28 @@ export async function GET() {
 
     const dataRows = rows.slice(1);
     
-    // Process rows into PAUSED_LONG and FREQ_PAUSED formats
+    // Sheet columns: MCAT ID(0), MCAT Name(1), Group Name(2), Pause Date(3), Pause BL(4), Duration(5)
     const pausedLong = dataRows.map(row => ({
-      name: row[0],
-      group: row[1],
-      bl: parseInt(row[2]) || 0,
-      days: parseInt(row[3]) || 0,
+      id:   row[0],
+      name: row[1],    // MCAT Name (display name)
+      group: row[2],   // Group Name (e.g. "Industrial Plants, Machinery & Equipment")
+      date: row[3],    // Pause Date (e.g. "24-04-2026") — kept for reference
+      bl:   parseInt(row[4]) || 0,   // Pause BL
+      days: parseInt(row[5]) || 0,   // Duration (days paused)
     })).filter(r => r.name);
 
-    // Assuming freq is in column 5 if it exists, otherwise use fallback logic
+    // Freq paused: MCATs with duration >= 3 days treated as frequently-paused
     const freqPaused = dataRows.map(row => ({
-      name: row[0],
-      group: row[1],
-      freq: parseInt(row[4]) || 0,
-    })).filter(r => r.name && r.freq > 0);
+      name:  row[1],
+      group: row[2],
+      freq:  parseInt(row[5]) || 0,   // Use duration as proxy for severity
+    })).filter(r => r.name && r.freq >= 3);
 
     return NextResponse.json({ 
       success: true, 
       data: { 
         pausedLong, 
-        freqPaused: freqPaused.length > 0 ? freqPaused : pausedLong.slice(0, 10).map(r => ({ ...r, freq: Math.floor(Math.random() * 5) + 2 }))
+        freqPaused
       } 
     }, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } });
   } catch (error: any) {

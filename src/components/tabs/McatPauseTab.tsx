@@ -192,25 +192,39 @@ export default function McatPauseTab() {
             <tr>
               <th>MCAT Name</th>
               <th>Group</th>
+              <th className="num">Pause Date</th>
               <th className="num">BL (Lost)</th>
               <th className="num">Days Paused</th>
             </tr>
           </thead>
           <tbody>
-            {pausedLong.map((r, i) => (
-              <tr key={i}>
-                <td style={{ color: r.days >= 7 ? 'var(--amber)' : 'inherit' }}>{r.name}</td>
-                <td className="sm">{r.group}</td>
-                <td className={`num ${r.bl >= 80 ? 'bd' : r.bl >= 60 ? 'wn' : ''}`}>{r.bl}</td>
-                <td className="num hi">{r.days}</td>
-              </tr>
-            ))}
+            {pausedLong.filter(r => r.days >= 4).length > 0 ? (
+              pausedLong.filter(r => r.days >= 4).map((r, i) => (
+                <tr key={i}>
+                  <td style={{ color: r.days >= 14 ? 'var(--red)' : r.days >= 7 ? 'var(--amber)' : 'inherit' }}>{r.name}</td>
+                  <td className="sm">{r.group}</td>
+                  <td className="num" style={{ fontSize: '11px', color: 'var(--muted)' }}>{r.date}</td>
+                  <td className={`num ${r.bl >= 80 ? 'bd' : r.bl >= 60 ? 'wn' : ''}`}>{r.bl}</td>
+                  <td className="num hi">{r.days}</td>
+                </tr>
+              ))
+            ) : (
+              pausedLong.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.name}</td>
+                  <td className="sm">{r.group}</td>
+                  <td className="num" style={{ fontSize: '11px', color: 'var(--muted)' }}>{r.date}</td>
+                  <td className={`num ${r.bl >= 80 ? 'bd' : r.bl >= 60 ? 'wn' : ''}`}>{r.bl}</td>
+                  <td className="num hi">{r.days}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="sh" style={{ marginTop: '25px' }}>
-        <h2>Frequent Pause Offenders <span>3+ occurrences</span></h2>
+        <h2>Long-Duration Pauses <span>Paused 3+ days</span></h2>
       </div>
       <div className="tw cc">
         <table className="dt">
@@ -218,17 +232,21 @@ export default function McatPauseTab() {
             <tr>
               <th>MCAT Name</th>
               <th>Group</th>
-              <th className="num">Frequency (MTD)</th>
+              <th className="num">BL</th>
+              <th className="num">Days Paused</th>
             </tr>
           </thead>
           <tbody>
-            {freqPaused.map((r, i) => (
+            {freqPaused.length > 0 ? freqPaused.map((r, i) => (
               <tr key={i}>
-                <td style={{ color: r.freq >= 3 ? 'var(--amber)' : 'inherit' }}>{r.name}</td>
+                <td style={{ color: r.freq >= 14 ? 'var(--red)' : r.freq >= 7 ? 'var(--amber)' : 'inherit' }}>{r.name}</td>
                 <td className="sm">{r.group}</td>
+                <td className="num">{r.bl ?? '—'}</td>
                 <td className="num hi">{r.freq}</td>
               </tr>
-            ))}
+            )) : (
+              <tr><td colSpan={4} style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)' }}>No long-duration pauses found</td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -247,8 +265,10 @@ export default function McatPauseTab() {
                   <thead>
                     <tr>
                       <th>MCAT Name</th>
-                      <th>Category</th>
-                      <th className="num">BL Impact</th>
+                      <th>Group</th>
+                      <th className="num">Pause Date</th>
+                      <th className="num">BL</th>
+                      <th className="num">Days</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -257,11 +277,13 @@ export default function McatPauseTab() {
                         <tr key={idx}>
                           <td>{item.name}</td>
                           <td className="sm">{item.group}</td>
+                          <td className="num" style={{ fontSize: '11px', color: 'var(--muted)' }}>{item.date}</td>
                           <td className="num hi">{item.bl}</td>
+                          <td className="num">{item.days}</td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)' }}>No data found for this range</td></tr>
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)' }}>No data found for this range</td></tr>
                     )}
                   </tbody>
                 </table>

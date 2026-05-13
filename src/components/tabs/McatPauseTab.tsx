@@ -89,10 +89,37 @@ export default function McatPauseTab() {
     setModalOpen(true);
   };
 
+  if (loading) {
+    return (
+      <div className="tab on" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid var(--bdr2)', borderTopColor: 'var(--teal)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span style={{ color: 'var(--muted)', fontSize: '14px' }}>Loading MCAT pause data from Google Sheets...</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="tab on" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+        <div className="cc" style={{ maxWidth: '520px', width: '100%', textAlign: 'center', padding: '32px 24px' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
+          <div className="ct" style={{ color: 'var(--red)', marginBottom: '8px' }}>Failed to Load Data</div>
+          <div className="cs" style={{ marginBottom: '16px', lineHeight: '1.6' }}>{error}</div>
+          <div style={{ background: 'var(--bg2)', borderRadius: '8px', padding: '12px 16px', fontSize: '12px', color: 'var(--muted)', textAlign: 'left' }}>
+            <strong style={{ color: 'var(--fg)' }}>To fix this:</strong><br />
+            Ensure the Google Sheet is shared as <em>Anyone with the link</em> → <strong>Viewer</strong><br />
+          </div>
+          <button className="btn btn-p" style={{ marginTop: '16px', padding: '8px 20px' }} onClick={() => window.location.reload()}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="tab on">
       <div className="alert alert-warn">
-        <strong>Attention:</strong> 135 MCATs were paused last week. 3 of these are high-volume (80+ BL) items.
+        <strong>Attention:</strong> {pausedLong.length > 0 ? `${pausedLong.length} MCATs are currently paused. ${pausedLong.filter(m => m.bl >= 80).length} of these are high-volume (80+ BL) items.` : 'No MCATs are currently paused.'}
       </div>
 
       <div className="sh">
@@ -155,7 +182,7 @@ export default function McatPauseTab() {
       </div>
 
       <div className="sh">
-        <h2>High-Impact Pauses <span>Paused for 4+ days</span></h2>
+        <h2>High-Impact Pauses <span>Currently Paused for 4+ days</span></h2>
       </div>
       <div className="tw cc">
         <table className="dt">
@@ -163,25 +190,31 @@ export default function McatPauseTab() {
             <tr>
               <th>MCAT Name</th>
               <th>Group</th>
-              <th className="num">BL (Lost)</th>
+              <th className="num">Pause Date</th>
+              <th className="num">BL (Last 3 Days)</th>
               <th className="num">Days Paused</th>
             </tr>
           </thead>
           <tbody>
-            {pausedLong.map((r, i) => (
-              <tr key={i}>
-                <td style={{ color: r.days >= 7 ? 'var(--amber)' : 'inherit' }}>{r.name}</td>
-                <td className="sm">{r.group}</td>
-                <td className={`num ${r.bl >= 80 ? 'bd' : r.bl >= 60 ? 'wn' : ''}`}>{r.bl}</td>
-                <td className="num hi">{r.days}</td>
-              </tr>
-            ))}
+            {pausedLong.filter(r => r.days >= 4).length > 0 ? (
+              pausedLong.filter(r => r.days >= 4).map((r, i) => (
+                <tr key={i}>
+                  <td style={{ color: r.days >= 14 ? 'var(--red)' : r.days >= 7 ? 'var(--amber)' : 'inherit' }}>{r.name}</td>
+                  <td className="sm">{r.group}</td>
+                  <td className="num" style={{ fontSize: '11px', color: 'var(--muted)' }}>{r.date}</td>
+                  <td className={`num ${r.bl >= 80 ? 'bd' : r.bl >= 60 ? 'wn' : ''}`}>{r.bl}</td>
+                  <td className="num hi">{r.days}</td>
+                </tr>
+              ))
+            ) : (
+              <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)' }}>No high-impact pauses currently</td></tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="sh" style={{ marginTop: '25px' }}>
-        <h2>Frequent Pause Offenders <span>3+ occurrences</span></h2>
+        <h2>Longest Paused MCATs <span>Currently paused</span></h2>
       </div>
       <div className="tw cc">
         <table className="dt">
@@ -189,17 +222,23 @@ export default function McatPauseTab() {
             <tr>
               <th>MCAT Name</th>
               <th>Group</th>
-              <th className="num">Frequency (MTD)</th>
+              <th className="num">Pause Date</th>
+              <th className="num">BL</th>
+              <th className="num">Days Paused</th>
             </tr>
           </thead>
           <tbody>
-            {freqPaused.map((r, i) => (
+            {freqPaused.length > 0 ? freqPaused.map((r, i) => (
               <tr key={i}>
-                <td style={{ color: r.freq >= 3 ? 'var(--amber)' : 'inherit' }}>{r.name}</td>
+                <td style={{ color: r.days >= 14 ? 'var(--red)' : r.days >= 7 ? 'var(--amber)' : 'inherit' }}>{r.name}</td>
                 <td className="sm">{r.group}</td>
-                <td className="num hi">{r.freq}</td>
+                <td className="num" style={{ fontSize: '11px', color: 'var(--muted)' }}>{r.date}</td>
+                <td className="num">{r.bl ?? '—'}</td>
+                <td className="num hi">{r.days}</td>
               </tr>
-            ))}
+            )) : (
+              <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)' }}>No data available</td></tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -218,8 +257,10 @@ export default function McatPauseTab() {
                   <thead>
                     <tr>
                       <th>MCAT Name</th>
-                      <th>Category</th>
-                      <th className="num">BL Impact</th>
+                      <th>Group</th>
+                      <th className="num">Pause Date</th>
+                      <th className="num">BL</th>
+                      <th className="num">Days</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -228,11 +269,13 @@ export default function McatPauseTab() {
                         <tr key={idx}>
                           <td>{item.name}</td>
                           <td className="sm">{item.group}</td>
+                          <td className="num" style={{ fontSize: '11px', color: 'var(--muted)' }}>{item.date}</td>
                           <td className="num hi">{item.bl}</td>
+                          <td className="num">{item.days}</td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)' }}>No data found for this range</td></tr>
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)' }}>No data found for this range</td></tr>
                     )}
                   </tbody>
                 </table>

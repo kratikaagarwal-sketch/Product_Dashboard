@@ -40,7 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-
 #xm files
 *.xlsm
 temp_xl/
+temp_xl/xl/worksheets/sheet1.xml

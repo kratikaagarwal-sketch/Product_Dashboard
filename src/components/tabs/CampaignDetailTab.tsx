@@ -80,14 +80,35 @@ export default function CampaignDetailTab() {
 
   const campaign = CAMPAIGNS[campaignKey];
   
+  const [hierarchyData, setHierarchyData] = useState<any>({});
+
+  React.useEffect(() => {
+    fetch('/hierarchy.json')
+      .then(r => r.json())
+      .then(data => setHierarchyData(data))
+      .catch(e => console.error("Failed to load hierarchy data", e));
+  }, []);
+
+  const CAMPAIGN_TO_GROUP: Record<string, string> = {
+    bc: 'Building Construction Material, Equipment, Civil Engineering and Real Estate',
+    ind_eng: 'Industrial & Engineering Products, Spares and Supplies',
+    ind_pm: 'Industrial Plants, Machinery & Equipment',
+    mech: 'Mechanical Components & Parts',
+    packaging: 'Packaging Material, Supplies & Machines',
+    tools: 'Tools, Machine Tools, Power Tools & Hand Tools',
+    kitchen: 'Kitchen Containers, Utensils, Stove, Cookware, Tableware and Food Choppers'
+  };
+
   // Cascading logic
   const pmcats = useMemo(() => {
-    return HIERARCHY_DATA[campaignKey] || {};
-  }, [campaignKey]);
+    const groupName = CAMPAIGN_TO_GROUP[campaignKey];
+    if (!groupName || !hierarchyData[groupName]) return {};
+    return hierarchyData[groupName].pmcats || {};
+  }, [campaignKey, hierarchyData]);
 
   const mcats = useMemo(() => {
-    if (pmcatKey === 'all') return {};
-    return pmcats[pmcatKey]?.mcats || {};
+    if (pmcatKey === 'all' || !pmcats[pmcatKey]) return {};
+    return pmcats[pmcatKey].mcats || {};
   }, [pmcatKey, pmcats]);
 
   // Derived data based on filters

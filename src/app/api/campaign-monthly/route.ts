@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 
 const pool = new Pool({
-  host: 'bi-dwh-redshift-development.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
-  user: 'rd_kishalay_113578',
-  password: 'Vt4r4024J4ii',
-  database: 'biredshiftdevelopment',
+  host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
+  user: 'rd_mktplace_pwrbi',
+  password: 'p83z28CjbMjA',
+  database: 'biredshiftdb',
   port: 5439, // Default Redshift port
   ssl: { rejectUnauthorized: false }
 });

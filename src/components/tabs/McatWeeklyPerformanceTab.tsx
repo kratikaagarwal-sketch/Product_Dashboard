@@ -196,9 +196,9 @@ export default function McatWeeklyPerformanceTab() {
     }
 
     if (avgCtr > 2.5) {
-      insights.push(`Healthy Engagement: Overall CTR of ${avgCtr.toFixed(2)}% is performing above the 2.5% threshold benchmark.`);
+      insights.push(`Healthy Engagement: Overall CTR of ${avgCtr.toFixed(1)}% is performing above the 2.5% threshold benchmark.`);
     } else {
-      insights.push(`Low Engagement: Overall CTR is ${avgCtr.toFixed(2)}%, which is below the optimal target benchmark.`);
+      insights.push(`Low Engagement: Overall CTR is ${avgCtr.toFixed(1)}%, which is below the optimal target benchmark.`);
     }
 
     return insights;
@@ -206,7 +206,7 @@ export default function McatWeeklyPerformanceTab() {
 
   const formatVal = (val: number, metric: string) => {
     if (metric === 'cost' || metric === 'cost_per_txn') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct') return `${val.toFixed(2)}%`;
+    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct') return `${val.toFixed(1)}%`;
     return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
   };
 
@@ -315,15 +315,15 @@ export default function McatWeeklyPerformanceTab() {
         <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
           <div><div className="bn-val" style={{ color: C.b }}>{kpiStats.impressions.toLocaleString()}</div><div className="bn-lbl">Impressions</div></div>
           <div><div className="bn-val" style={{ color: C.t }}>{kpiStats.clicks.toLocaleString()}</div><div className="bn-lbl">Clicks</div></div>
-          <div><div className="bn-val" style={{ color: C.g }}>{kpiStats.ctr.toFixed(2)}%</div><div className="bn-lbl">CTR</div></div>
+          <div><div className="bn-val" style={{ color: C.g }}>{kpiStats.ctr.toFixed(1)}%</div><div className="bn-lbl">CTR</div></div>
           <div><div className="bn-val" style={{ color: C.r }}>₹{kpiStats.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost (INR)</div></div>
           <div><div className="bn-val" style={{ color: C.a }}>{kpiStats.conversions.toLocaleString()}</div><div className="bn-lbl">Conversions</div></div>
           <div><div className="bn-val" style={{ color: C.p }}>{kpiStats.bl_approved.toLocaleString()}</div><div className="bn-lbl">BL Approved</div></div>
           <div><div className="bn-val" style={{ color: '#66bb6a' }}>{kpiStats.bl_sold_approved.toLocaleString()}</div><div className="bn-lbl">BL Sold</div></div>
           <div><div className="bn-val" style={{ color: C.d }}>{kpiStats.bl_txn_approved.toLocaleString()}</div><div className="bn-lbl">Txn Approved</div></div>
           <div><div className="bn-val" style={{ color: '#ff8a65' }}>{kpiStats.blni.toLocaleString()}</div><div className="bn-lbl">BLNI</div></div>
-          <div><div className="bn-val" style={{ color: '#29b6f6' }}>{kpiStats.txn_approved_pct.toFixed(2)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
-          <div><div className="bn-val" style={{ color: '#ffca28' }}>{kpiStats.bl_sold_pct.toFixed(2)}%</div><div className="bn-lbl">BL Sold %</div></div>
+          <div><div className="bn-val" style={{ color: '#29b6f6' }}>{kpiStats.txn_approved_pct.toFixed(1)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
+          <div><div className="bn-val" style={{ color: '#ffca28' }}>{kpiStats.bl_sold_pct.toFixed(1)}%</div><div className="bn-lbl">BL Sold %</div></div>
           <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{kpiStats.cost_per_txn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost / Txn</div></div>
         </div>
       </div>

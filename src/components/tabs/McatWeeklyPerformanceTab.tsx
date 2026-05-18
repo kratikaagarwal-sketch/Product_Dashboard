@@ -10,11 +10,19 @@ const METRICS = [
   { key: 'impressions', label: 'Impressions' },
   { key: 'cost', label: 'Cost (INR)' },
   { key: 'conversions', label: 'Conversions' },
-  { key: 'ctr', label: 'CTR %' }
+  { key: 'ctr', label: 'CTR %' },
+  { key: 'bl_approved', label: 'BL Approved' },
+  { key: 'bl_sold_approved', label: 'BL Sold' },
+  { key: 'bl_txn_approved', label: 'Txn Approved' },
+  { key: 'blni', label: 'BLNI' },
+  { key: 'txn_approved_pct', label: 'Txn (Approved) %' },
+  { key: 'bl_sold_pct', label: 'BL Sold %' },
+  { key: 'cost_per_txn', label: 'Cost / Txn' }
 ];
 
 export default function McatWeeklyPerformanceTab() {
   const [data, setData] = useState<any[]>([]);
+  const [campaignData, setCampaignData] = useState<any[]>([]);
   const [hierarchy, setHierarchy] = useState<Record<string, { pmcat: string; group: string }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +48,7 @@ export default function McatWeeklyPerformanceTab() {
       if (resRedshift.success) {
         setHierarchy(resHierarchy);
         setData(resRedshift.data);
+        setCampaignData(resRedshift.campaignData || []);
 
         // Default week
         const weeks = Array.from(new Set(resRedshift.data.map((d: any) => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a));
@@ -97,15 +106,22 @@ export default function McatWeeklyPerformanceTab() {
     if (granularity !== 'group' && selectedPmcat !== 'all') filtered = filtered.filter(d => d.pmcat === selectedPmcat);
     if (granularity === 'mcat' && selectedMcat !== 'all') filtered = filtered.filter(d => d.mcat === selectedMcat);
 
-    const totals = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0 };
+    const totals = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0 };
     filtered.forEach(d => {
-      totals.clicks += d.clicks;
-      totals.impressions += d.impressions;
-      totals.cost += d.cost;
-      totals.conversions += d.conversions;
+      totals.clicks += d.clicks || 0;
+      totals.impressions += d.impressions || 0;
+      totals.cost += d.cost || 0;
+      totals.conversions += d.conversions || 0;
+      totals.bl_sold_approved += d.bl_sold_approved || 0;
+      totals.bl_approved += d.bl_approved || 0;
+      totals.bl_txn_approved += d.bl_txn_approved || 0;
+      totals.blni += d.blni || 0;
     });
     
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
+    totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
+    totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
+    totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
     return totals;
   }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, selectedMcat]);
 
@@ -127,18 +143,25 @@ export default function McatWeeklyPerformanceTab() {
       if (granularity === 'group') key = d.group;
 
       if (!rolledUp.has(key)) {
-        rolledUp.set(key, { name: key, clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0 });
+        rolledUp.set(key, { name: key, clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0 });
       }
       const existing = rolledUp.get(key);
-      existing.clicks += d.clicks;
-      existing.impressions += d.impressions;
-      existing.cost += d.cost;
-      existing.conversions += d.conversions;
+      existing.clicks += d.clicks || 0;
+      existing.impressions += d.impressions || 0;
+      existing.cost += d.cost || 0;
+      existing.conversions += d.conversions || 0;
+      existing.bl_sold_approved += d.bl_sold_approved || 0;
+      existing.bl_approved += d.bl_approved || 0;
+      existing.bl_txn_approved += d.bl_txn_approved || 0;
+      existing.blni += d.blni || 0;
     });
 
     const rolledUpArr = Array.from(rolledUp.values()).map(d => ({
       ...d,
-      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0
+      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+      txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
+      bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
     }));
 
     const sorted = [...rolledUpArr].sort((a, b) => b[rankMetric] - a[rankMetric]);
@@ -185,8 +208,8 @@ export default function McatWeeklyPerformanceTab() {
   }, [rankingData, rankMetric, kpiStats]);
 
   const formatVal = (val: number, metric: string) => {
-    if (metric === 'cost') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-    if (metric === 'ctr') return `${val.toFixed(2)}%`;
+    if (metric === 'cost' || metric === 'cost_per_txn') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct') return `${val.toFixed(2)}%`;
     return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
   };
 
@@ -298,6 +321,13 @@ export default function McatWeeklyPerformanceTab() {
           <div><div className="bn-val" style={{ color: C.g }}>{kpiStats.ctr.toFixed(2)}%</div><div className="bn-lbl">CTR</div></div>
           <div><div className="bn-val" style={{ color: C.r }}>₹{kpiStats.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost (INR)</div></div>
           <div><div className="bn-val" style={{ color: C.a }}>{kpiStats.conversions.toLocaleString()}</div><div className="bn-lbl">Conversions</div></div>
+          <div><div className="bn-val" style={{ color: C.p }}>{kpiStats.bl_approved.toLocaleString()}</div><div className="bn-lbl">BL Approved</div></div>
+          <div><div className="bn-val" style={{ color: '#66bb6a' }}>{kpiStats.bl_sold_approved.toLocaleString()}</div><div className="bn-lbl">BL Sold</div></div>
+          <div><div className="bn-val" style={{ color: C.d }}>{kpiStats.bl_txn_approved.toLocaleString()}</div><div className="bn-lbl">Txn Approved</div></div>
+          <div><div className="bn-val" style={{ color: '#ff8a65' }}>{kpiStats.blni.toLocaleString()}</div><div className="bn-lbl">BLNI</div></div>
+          <div><div className="bn-val" style={{ color: '#29b6f6' }}>{kpiStats.txn_approved_pct.toFixed(2)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
+          <div><div className="bn-val" style={{ color: '#ffca28' }}>{kpiStats.bl_sold_pct.toFixed(2)}%</div><div className="bn-lbl">BL Sold %</div></div>
+          <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{kpiStats.cost_per_txn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost / Txn</div></div>
         </div>
       </div>
 
@@ -466,6 +496,42 @@ export default function McatWeeklyPerformanceTab() {
             }} 
           />
         </div>
+      </div>
+
+      {/* Campaign Conversion Analysis */}
+      <div className="sh" style={{ marginTop: '30px' }}>
+        <h2>Campaign Conversions (by MCAT ID) <span>From mcat_ads_campaign</span></h2>
+      </div>
+      <div className="tw cc">
+        <table className="dt">
+          <thead>
+            <tr>
+              <th>MCAT ID</th>
+              <th className="num">BL Approved</th>
+              <th className="num">BL Sold</th>
+              <th className="num">Txn</th>
+              <th className="num">BLNI</th>
+              <th className="num">Cost (INR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {campaignData
+              .filter(d => d.week_start_date === selectedWeek)
+              .sort((a,b) => b.bl_approved - a.bl_approved)
+              .slice(0, 50)
+              .map((item, idx) => (
+              <tr key={item.mcat_id + idx}>
+                <td style={{ fontWeight: 500 }}>{item.mcat_id}</td>
+                <td className="num">{item.bl_approved.toLocaleString()}</td>
+                <td className="num">{item.bl_sold_approved.toLocaleString()}</td>
+                <td className="num">{item.bl_txn_approved.toLocaleString()}</td>
+                <td className="num">{item.blni.toLocaleString()}</td>
+                <td className="num">₹{item.total_cost_inr.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+              </tr>
+            ))}
+            {campaignData.filter(d => d.week_start_date === selectedWeek).length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center' }}>No data</td></tr>}
+          </tbody>
+        </table>
       </div>
     </div>
   );

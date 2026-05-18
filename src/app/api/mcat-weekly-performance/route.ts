@@ -16,7 +16,7 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-const query = `
+const query1 = `
 SELECT 
     DATE_TRUNC('week', report_date) AS week_start_date,
     segments_product_type_l4,
@@ -30,12 +30,55 @@ GROUP BY 1, 2
 ORDER BY 1 DESC;
 `;
 
+const query2 = `
+SELECT
+    DATE_TRUNC('week', st_date) AS week_start_date,
+    mcat_id AS eto_ofr_mcat_id,
+    SUM(bl_approved) AS bl_approved,
+    SUM(bl_sold) AS bl_sold_approved,
+    SUM(trans) AS bl_txn_approved,
+    SUM(blni) AS blni,
+    SUM(total_cost_inr) AS total_cost_inr
+FROM im_datamart_category.mcat_ads_campaign
+WHERE
+    time_period_flag = 'w'
+    AND st_date >= CURRENT_DATE - INTERVAL '12 weeks'
+    AND flag = 2
+GROUP BY 1, 2
+ORDER BY 1 DESC;
+`;
+
+const query3 = `
+SELECT
+    DATE_TRUNC('week', a.st_date) AS week_start_date,
+    b.glcat_mcat_name AS mcat_name,
+    SUM(a.bl_sold) AS bl_sold_approved,
+    SUM(a.bl_approved) AS bl_approved,
+    SUM(a.trans) AS bl_txn_approved,
+    SUM(a.blni) AS blni
+FROM im_datamart_category.mcat_ads_campaign a
+LEFT JOIN im_dwh.dim_glcat_mcat b
+    ON a.mcat_id = b.glcat_mcat_id
+WHERE
+    a.time_period_flag = 'w'
+    AND a.st_date >= CURRENT_DATE - INTERVAL '12 weeks'
+    AND a.flag = 2
+GROUP BY 1, 2
+ORDER BY 1 DESC;
+`;
+
 export async function GET() {
   try {
-    const res = await pool.query(query);
+    const [res1, res2, res3] = await Promise.all([
+      pool.query(query1),
+      pool.query(query2),
+      pool.query(query3)
+    ]);
 
-    // Map rows to ensure proper types, calculated CTR, and avoid nulls
-    const data = res.rows.map(row => {
+    const mergedMap = new Map();
+
+    // Map rows for the first query
+    res1.rows.forEach(row => {
       const clicks = parseInt(row.total_clicks, 10) || 0;
       const impressions = parseInt(row.total_impressions, 10) || 0;
       const cost = parseFloat(row.total_cost_inr) || 0;
@@ -43,7 +86,73 @@ export async function GET() {
       
       const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
 
-      // Extract the YYYY-MM-DD from week_start_date (which comes as a Date object or string from pg)
+      let weekStr = '';
+      if (row.week_start_date) {
+        const d = new Date(row.week_start_date);
+        weekStr = d.toISOString().split('T')[0];
+      }
+
+      const mcatName = row.segments_product_type_l4 || 'Unknown';
+      const key = `${weekStr}_${mcatName.toLowerCase()}`;
+
+      mergedMap.set(key, {
+        week_start_date: weekStr,
+        mcat: mcatName,
+        clicks,
+        impressions,
+        cost,
+        conversions,
+        ctr,
+        bl_sold_approved: 0,
+        bl_approved: 0,
+        bl_txn_approved: 0,
+        blni: 0
+      });
+    });
+
+    // Map rows for the third query and merge with the first query data
+    res3.rows.forEach(row => {
+      let weekStr = '';
+      if (row.week_start_date) {
+        const d = new Date(row.week_start_date);
+        weekStr = d.toISOString().split('T')[0];
+      }
+
+      const mcatName = row.mcat_name || 'Unknown';
+      const key = `${weekStr}_${mcatName.toLowerCase()}`;
+
+      const bl_sold_approved = parseInt(row.bl_sold_approved, 10) || 0;
+      const bl_approved = parseInt(row.bl_approved, 10) || 0;
+      const bl_txn_approved = parseInt(row.bl_txn_approved, 10) || 0;
+      const blni = parseInt(row.blni, 10) || 0;
+
+      if (mergedMap.has(key)) {
+        const existing = mergedMap.get(key);
+        existing.bl_sold_approved = bl_sold_approved;
+        existing.bl_approved = bl_approved;
+        existing.bl_txn_approved = bl_txn_approved;
+        existing.blni = blni;
+      } else {
+        mergedMap.set(key, {
+          week_start_date: weekStr,
+          mcat: mcatName,
+          clicks: 0,
+          impressions: 0,
+          cost: 0,
+          conversions: 0,
+          ctr: 0,
+          bl_sold_approved,
+          bl_approved,
+          bl_txn_approved,
+          blni
+        });
+      }
+    });
+
+    const data = Array.from(mergedMap.values());
+
+    // Map rows for the second query
+    const campaignData = res2.rows.map(row => {
       let weekStr = '';
       if (row.week_start_date) {
         const d = new Date(row.week_start_date);
@@ -52,16 +161,16 @@ export async function GET() {
 
       return {
         week_start_date: weekStr,
-        mcat: row.segments_product_type_l4 || 'Unknown',
-        clicks,
-        impressions,
-        cost,
-        conversions,
-        ctr
+        mcat_id: row.eto_ofr_mcat_id || 'Unknown',
+        bl_approved: parseInt(row.bl_approved, 10) || 0,
+        bl_sold_approved: parseInt(row.bl_sold_approved, 10) || 0,
+        bl_txn_approved: parseInt(row.bl_txn_approved, 10) || 0,
+        blni: parseInt(row.blni, 10) || 0,
+        total_cost_inr: parseFloat(row.total_cost_inr) || 0
       };
     });
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data, campaignData });
   } catch (error: any) {
     console.error('Error fetching Redshift data:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

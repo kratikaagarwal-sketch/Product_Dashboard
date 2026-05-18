@@ -5,6 +5,14 @@ import ChartComponent from '../ChartComponent';
 
 const C = { t: '#00cba4', b: '#4d9fff', g: '#3dd68c', r: '#ff6168', a: '#ffb547', p: '#a78bfa', d: '#4a6070' };
 
+const METRICS = [
+  { key: 'clicks', label: 'Clicks' },
+  { key: 'impressions', label: 'Impressions' },
+  { key: 'cost', label: 'Cost (INR)' },
+  { key: 'conversions', label: 'Conversions' },
+  { key: 'ctr', label: 'CTR %' }
+];
+
 export default function McatWeeklyPerformanceTab() {
   const [data, setData] = useState<any[]>([]);
   const [hierarchy, setHierarchy] = useState<Record<string, { pmcat: string; group: string }>>({});
@@ -145,6 +153,37 @@ export default function McatWeeklyPerformanceTab() {
     };
   }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, rankMetric]);
 
+  // AI Insights Generation
+  const aiInsights = useMemo(() => {
+    if (rankingData.top10.length === 0) return [];
+    
+    const insights = [];
+    const topPerformer = rankingData.top10[0];
+    const topCost = [...rankingData.top10, ...rankingData.bottom10].sort((a,b) => b.cost - a.cost)[0];
+    const avgCtr = kpiStats.ctr;
+
+    const metricLabel = METRICS.find(m => m.key === rankMetric)?.label || rankMetric;
+
+    insights.push(`Top Driver: ${topPerformer.name} is leading the selected group with the highest ${metricLabel}.`);
+    
+    if (topCost && topCost.cost > 0) {
+      insights.push(`Budget Focus: ${topCost.name} consumed the highest budget (₹${topCost.cost.toLocaleString(undefined, {maximumFractionDigits: 0})}) this week.`);
+    }
+
+    if (rankingData.bottom10.length > 0) {
+      const bottom = rankingData.bottom10[0];
+      insights.push(`Action Required: ${bottom.name} is heavily underperforming in ${metricLabel}. Consider pausing or optimizing its bids.`);
+    }
+
+    if (avgCtr > 2.5) {
+      insights.push(`Healthy Engagement: Overall CTR of ${avgCtr.toFixed(2)}% is performing above the 2.5% threshold benchmark.`);
+    } else {
+      insights.push(`Low Engagement: Overall CTR is ${avgCtr.toFixed(2)}%, which is below the optimal target benchmark.`);
+    }
+
+    return insights;
+  }, [rankingData, rankMetric, kpiStats]);
+
   const formatVal = (val: number, metric: string) => {
     if (metric === 'cost') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
     if (metric === 'ctr') return `${val.toFixed(2)}%`;
@@ -179,14 +218,6 @@ export default function McatWeeklyPerformanceTab() {
       </div>
     );
   }
-
-  const METRICS = [
-    { key: 'clicks', label: 'Clicks' },
-    { key: 'impressions', label: 'Impressions' },
-    { key: 'cost', label: 'Cost (INR)' },
-    { key: 'conversions', label: 'Conversions' },
-    { key: 'ctr', label: 'CTR %' }
-  ];
 
   const getEntityTitle = () => {
     if (granularity === 'group') return selectedGroup === 'all' ? 'All Groups' : selectedGroup;
@@ -268,6 +299,22 @@ export default function McatWeeklyPerformanceTab() {
           <div><div className="bn-val" style={{ color: C.r }}>₹{kpiStats.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost (INR)</div></div>
           <div><div className="bn-val" style={{ color: C.a }}>{kpiStats.conversions.toLocaleString()}</div><div className="bn-lbl">Conversions</div></div>
         </div>
+      </div>
+
+      {/* AI Insights Section */}
+      <div className="sh" style={{ marginTop: '30px' }}>
+        <h2>✨ AI Generated Insights <span>Based on selected filters</span></h2>
+      </div>
+      <div className="cc" style={{ margin: 0, marginBottom: '25px', background: 'var(--bg2)', border: '1px solid var(--teal)' }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {aiInsights.map((insight, i) => (
+            <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <span style={{ color: 'var(--teal)' }}>✦</span>
+              <span style={{ fontSize: '14px', lineHeight: '1.4' }}>{insight}</span>
+            </li>
+          ))}
+          {aiInsights.length === 0 && <li style={{ color: 'var(--muted)' }}>Not enough data to generate insights for this selection.</li>}
+        </ul>
       </div>
 
       <div className="sh" style={{ marginTop: '30px' }}>

@@ -9,7 +9,6 @@ import GoogleAdsTab from "@/components/tabs/GoogleAdsTab";
 import HygieneTab from "@/components/tabs/HygieneTab";
 import McatPauseTab from "@/components/tabs/McatPauseTab";
 import CategoryDiversityTab from "@/components/tabs/CategoryDiversityTab";
-import McatMasterTab from "@/components/tabs/McatMasterTab";
 import AiInsightsTab from "@/components/tabs/AiInsightsTab";
 import BlTab from "@/components/tabs/BlTab";
 import TrafficEnquiryTab from "@/components/tabs/TrafficEnquiryTab";
@@ -35,11 +34,10 @@ export default function Home() {
           {activeTab === "mcat" && <McatPauseTab />}
           {activeTab === "mcat_weekly" && <McatWeeklyPerformanceTab />}
           {activeTab === "diversity" && <CategoryDiversityTab />}
-          {activeTab === "master" && <McatMasterTab />}
           {activeTab === "ai" && <AiInsightsTab />}
           
           {/* Default view for unimplemented tabs */}
-          {!["overview", "google", "bl", "traffic_enquiry", "campaign", "hygiene", "mcat", "mcat_weekly", "diversity", "master", "ai"].includes(activeTab) && (
+          {!["overview", "google", "bl", "traffic_enquiry", "campaign", "hygiene", "mcat", "mcat_weekly", "diversity", "ai"].includes(activeTab) && (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted)' }}>
               <div style={{ fontSize: '30px', marginBottom: '10px' }}>🚧</div>
               <h3>Module under construction</h3>

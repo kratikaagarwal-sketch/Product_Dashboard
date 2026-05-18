@@ -19,10 +19,9 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const intelligenceItems = [
     { id: 'campaign', icon: '📂', label: 'Campaign Detail' },
     { id: 'mcat', icon: '⏸️', label: 'MCAT Pause' },
-    { id: 'mcat_weekly', icon: '📅', label: 'MCAT Weekly Perf' },
+    { id: 'mcat_weekly', icon: '📅', label: 'Campaign Analysis' },
     { id: 'hygiene', icon: '🧼', label: 'Feed Hygiene' },
     { id: 'diversity', icon: '🌈', label: 'Category Diversity' },
-    { id: 'master', icon: '🗄️', label: 'MCAT Master' },
     { id: 'ai', icon: '✨', label: 'AI Insights' },
   ];
 
@@ -30,10 +29,10 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     <aside className="sb">
       <div className="sb-logo">
         <div className="sb-brand">
-          <div className="sb-icon">AD</div>
-          <span>Ads Intelligence</span>
+          <div className="sb-icon">IM</div>
+          <span>IndiaMart Ads Insights</span>
         </div>
-        <div className="sb-sub">v2.4 — Product Master</div>
+        <div className="sb-sub">v2.4</div>
       </div>
 
       <nav className="sb-nav">

@@ -6,54 +6,12 @@ import { MN, M12 } from '@/lib/constants';
 
 const C = { t: '#00cba4', b: '#4d9fff', g: '#3dd68c', r: '#ff6168', a: '#ffb547', p: '#a78bfa', d: '#4a6070' };
 
-const TIMEFRAMES = [
-  { label: 'Monthly', gid: '376561276' },
-  { label: 'Weekly', gid: '1549728297' },
-  { label: 'Quarterly', gid: '791309001' },
-  { label: 'Daily', gid: '745688658' }
-];
-
 export default function OverviewTab() {
-  const [gid, setGid] = useState('376561276');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sheetData, setSheetData] = useState<any[]>([]);
-
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/dashboard-data?gid=${gid}`)
-      .then(res => res.json())
-      .then(res => {
-        if (res.success) {
-          setSheetData(res.data);
-          setError(null);
-        } else {
-          setError(res.error || 'Failed to fetch data');
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, [gid]);
-
-  // Extract columns dynamically or fallback to MN constants
-  const safeExtract = (keyMatch: string[], fallback: number[]) => {
-    if (!sheetData || sheetData.length === 0) return fallback;
-    const firstRow = sheetData[0];
-    const key = Object.keys(firstRow).find(k => keyMatch.some(m => k.toLowerCase().includes(m)));
-    if (key) {
-      return sheetData.map(r => r[key] || 0);
-    }
-    return fallback;
-  };
-
-  const labels = sheetData.length > 0 ? sheetData.map(r => Object.values(r)[0] as string) : M12;
-  const blData = safeExtract(['bl', 'lead', 'approved'], MN.bl);
-  const spendDataArr = safeExtract(['spend', 'cost', 'amount'], MN.spend);
-  const costBlDataArr = safeExtract(['cpl', 'cost/bl', 'cost per bl', 'cpa'], MN.costBL);
-  const txnDataArr = safeExtract(['txn', 'transaction', 'sold'], MN.txn);
+  const labels = M12;
+  const blData = MN.bl;
+  const spendDataArr = MN.spend;
+  const costBlDataArr = MN.costBL;
+  const txnDataArr = MN.txn;
 
   const blTrendData = {
     labels: labels,
@@ -109,12 +67,7 @@ export default function OverviewTab() {
     labels: ['WhatsApp', 'INTENT', 'FLPNS', 'Direct'],
     datasets: [
       {
-        data: sheetData.length > 0 ? [
-          safeExtract(['whatsapp'], [245739])[0],
-          safeExtract(['intent'], [134468])[0],
-          safeExtract(['flpns'], [106191])[0],
-          safeExtract(['direct'], [105584])[0]
-        ] : [245739, 134468, 106191, 105584],
+        data: [245739, 134468, 106191, 105584],
         backgroundColor: [C.t, C.b, C.p, C.a],
         borderWidth: 2,
         borderColor: '#141a22',
@@ -142,38 +95,28 @@ export default function OverviewTab() {
     ]
   };
 
+  const masterFlagData = {
+    labels: ['No Sale (0)', 'Low Txn', 'High', 'Medium', 'Low'],
+    datasets: [{
+      data: [78455, 8018, 7608, 2511, 1654],
+      backgroundColor: [C.d + 'cc', C.r + 'cc', C.a + 'cc', C.b + 'cc', C.g + 'cc'],
+      borderWidth: 2,
+      borderColor: '#141a22',
+    }]
+  };
+
+  const masterBlData = {
+    labels: ['Mar29-Apr4', 'Apr5-11', 'Apr12-18', 'Apr19-25'],
+    datasets: [{
+      label: 'Avg BL/MCAT',
+      data: [1.33, 1.26, 1.36, 1.24],
+      backgroundColor: [C.t + 'cc', C.b + 'cc', C.g + 'cc', C.a + 'cc'],
+      borderRadius: 5,
+    }]
+  };
+
   return (
     <div className="tab on">
-      {/* Timeframe Selector */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', gap: '8px', background: 'var(--bg2)', padding: '4px', borderRadius: '8px' }}>
-          {TIMEFRAMES.map(tf => (
-            <button 
-              key={tf.gid}
-              className={`pf-btn ${gid === tf.gid ? 'on' : ''}`}
-              onClick={() => setGid(tf.gid)}
-              style={{ padding: '6px 12px', border: 'none' }}
-            >
-              {tf.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
-          <div style={{ width: '30px', height: '30px', border: '3px solid var(--bdr2)', borderTopColor: 'var(--teal)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <span style={{ marginLeft: '12px', color: 'var(--muted)', fontSize: '14px' }}>Fetching Google Sheets Data...</span>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-      )}
-
-      {error && !loading && (
-        <div className="alert alert-warn" style={{ marginBottom: '20px' }}>
-          <strong>Sheet Connection Error:</strong> {error}
-        </div>
-      )}
-
       {/* KPI Cards */}
       <div className="kg">
         <div className="kc best">
@@ -211,6 +154,28 @@ export default function OverviewTab() {
           <div className="kv">31.4%</div>
           <div className="badge down" style={{ background: 'var(--rdim)', color: 'var(--red)' }}>▼ 4.5%</div>
           <div className="ks">Target: 80%</div>
+        </div>
+        <div className="kc">
+          <div className="kl">Total MCATs</div>
+          <div className="kv">98,246</div>
+          <div className="ks">Git_input_combine.xlsx</div>
+        </div>
+        <div className="kc">
+          <div className="kl">Performing MCATs</div>
+          <div className="kv">11,773</div>
+          <div className="badge up" style={{ background: 'var(--adim)', color: 'var(--amber)' }}>11.9%</div>
+          <div className="ks">At least 1 sale (MTD)</div>
+        </div>
+        <div className="kc">
+          <div className="kl">Avg BL / MCAT</div>
+          <div className="kv">1.24</div>
+          <div className="badge down">▼ 8.8%</div>
+          <div className="ks">Latest week</div>
+        </div>
+        <div className="kc">
+          <div className="kl">Max BL (Single)</div>
+          <div className="kv">822</div>
+          <div className="ks">Tent Air Cooler</div>
         </div>
       </div>
 
@@ -375,6 +340,22 @@ export default function OverviewTab() {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <div className="sh">
+        <h2>Global MCAT Repository <span>98K unique products</span></h2>
+      </div>
+      <div className="cg">
+        <div className="cc">
+          <div className="ct">Transaction Flag Mix</div>
+          <div className="cs">80% of MCATs have zero sales</div>
+          <ChartComponent type="doughnut" data={masterFlagData} />
+        </div>
+        <div className="cc">
+          <div className="ct">Avg BL Yield Trend</div>
+          <div className="cs">Approved leads per running MCAT</div>
+          <ChartComponent type="bar" data={masterBlData} />
         </div>
       </div>
     </div>

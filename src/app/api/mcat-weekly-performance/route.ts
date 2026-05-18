@@ -16,18 +16,30 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
+function extractDateString(val: any): string {
+  if (!val) return '';
+  if (typeof val === 'string') return val.split('T')[0];
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return '';
+}
+
 const query1 = `
 SELECT 
-    DATE_TRUNC('week', report_date) AS week_start_date,
-    segments_product_type_l4,
+    DATE_TRUNC('week', report_date + INTERVAL '1 day')::date - INTERVAL '1 day' AS week_start_date,
+    segments_product_type_l4 AS mcat_name,
     SUM(total_clicks) AS total_clicks,
     SUM(total_impressions) AS total_impressions,
     SUM(total_cost_inr) AS total_cost_inr,
     SUM(total_conversions) AS total_conversions
 FROM im_datamart_bigquery.fact_bigquery_product_ads
-WHERE report_date >= CURRENT_DATE - INTERVAL '12 weeks'
+WHERE report_date >= (SELECT MAX(report_date) FROM im_datamart_bigquery.fact_bigquery_product_ads) - INTERVAL '12 weeks'
 GROUP BY 1, 2
-ORDER BY 1 DESC;
+ORDER BY 1 DESC, 2;
 `;
 
 const query2 = `
@@ -49,8 +61,8 @@ ORDER BY 1 DESC;
 `;
 
 const query3 = `
-SELECT
-    DATE_TRUNC('week', a.st_date) AS week_start_date,
+SELECT 
+    a.st_date AS week_start_date,
     b.glcat_mcat_name AS mcat_name,
     SUM(a.bl_sold) AS bl_sold_approved,
     SUM(a.bl_approved) AS bl_approved,
@@ -60,11 +72,11 @@ FROM im_datamart_category.mcat_ads_campaign a
 LEFT JOIN im_dwh.dim_glcat_mcat b
     ON a.mcat_id = b.glcat_mcat_id
 WHERE
-    a.time_period_flag = 'w'
-    AND a.st_date >= CURRENT_DATE - INTERVAL '12 weeks'
-    AND a.flag = 2
+    a.flag = 2
+    AND a.time_period_flag = 'w'
+    AND a.st_date >= (SELECT MAX(st_date) FROM im_datamart_category.mcat_ads_campaign WHERE flag = 2 AND time_period_flag = 'w') - INTERVAL '12 weeks'
 GROUP BY 1, 2
-ORDER BY 1 DESC;
+ORDER BY 1 DESC, 2;
 `;
 
 export async function GET() {
@@ -86,13 +98,9 @@ export async function GET() {
       
       const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
 
-      let weekStr = '';
-      if (row.week_start_date) {
-        const d = new Date(row.week_start_date);
-        weekStr = d.toISOString().split('T')[0];
-      }
+      const weekStr = extractDateString(row.week_start_date);
 
-      const mcatName = row.segments_product_type_l4 || 'Unknown';
+      const mcatName = row.mcat_name || 'Unknown';
       const key = `${weekStr}_${mcatName.toLowerCase()}`;
 
       mergedMap.set(key, {
@@ -112,11 +120,7 @@ export async function GET() {
 
     // Map rows for the third query and merge with the first query data
     res3.rows.forEach(row => {
-      let weekStr = '';
-      if (row.week_start_date) {
-        const d = new Date(row.week_start_date);
-        weekStr = d.toISOString().split('T')[0];
-      }
+      const weekStr = extractDateString(row.week_start_date);
 
       const mcatName = row.mcat_name || 'Unknown';
       const key = `${weekStr}_${mcatName.toLowerCase()}`;
@@ -153,11 +157,7 @@ export async function GET() {
 
     // Map rows for the second query
     const campaignData = res2.rows.map(row => {
-      let weekStr = '';
-      if (row.week_start_date) {
-        const d = new Date(row.week_start_date);
-        weekStr = d.toISOString().split('T')[0];
-      }
+      const weekStr = extractDateString(row.week_start_date);
 
       return {
         week_start_date: weekStr,

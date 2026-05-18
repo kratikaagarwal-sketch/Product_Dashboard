@@ -12,9 +12,6 @@ const METRICS = [
   { key: 'conversions', label: 'Conversions' },
   { key: 'ctr', label: 'CTR %' },
   { key: 'bl_approved', label: 'BL Approved' },
-  { key: 'bl_sold_approved', label: 'BL Sold' },
-  { key: 'bl_txn_approved', label: 'Txn Approved' },
-  { key: 'blni', label: 'BLNI' },
   { key: 'txn_approved_pct', label: 'Txn (Approved) %' },
   { key: 'bl_sold_pct', label: 'BL Sold %' },
   { key: 'cost_per_txn', label: 'Cost / Txn' }

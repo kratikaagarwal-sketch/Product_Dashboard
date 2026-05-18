@@ -16,6 +16,18 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
+const devPool = new Pool({
+  host: 'bi-dwh-redshift-development.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
+  user: 'rd_kishalay_113578',
+  password: 'Vt4r4024J4ii',
+  database: 'biredshiftdevelopment',
+  port: 5439,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
 function extractDateString(val: any): string {
   if (!val) return '';
   if (typeof val === 'string') return val.split('T')[0];
@@ -79,12 +91,30 @@ GROUP BY 1, 2
 ORDER BY 1 DESC, 2;
 `;
 
+const query4 = `
+SELECT 
+    a.iil_google_ads_lable_name AS flag,
+    gl.glcat_mcat_name
+FROM im_dwh_rpt.glcat_mcat_addn_attributes g
+JOIN im_dwh.iil_google_ads_lable_master a
+    ON a.iil_google_ads_lable_master_id = g.fk_iil_google_ads_lable_master_id
+JOIN im_dwh_rpt.dim_glcat_mcat gl
+    ON gl.glcat_mcat_id = g.fk_glcat_mcat_id
+WHERE g.fk_glcat_mcat_id IN (
+    SELECT iil_eligible_mcatid 
+    FROM im_dwh.fact_iil_google_ads_eligibility 
+    WHERE iil_eligible_status IN (2, 5)
+)
+AND lower(a.iil_google_ads_lable_name) IN ('high', 'low', 'medium');
+`;
+
 export async function GET() {
   try {
-    const [res1, res2, res3] = await Promise.all([
+    const [res1, res2, res3, res4] = await Promise.all([
       pool.query(query1),
       pool.query(query2),
-      pool.query(query3)
+      pool.query(query3),
+      devPool.query(query4)
     ]);
 
     const mergedMap = new Map();
@@ -170,7 +200,9 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ success: true, data, campaignData });
+    const adsRunningMcats = res4.rows.map(row => row.glcat_mcat_name || 'Unknown');
+
+    return NextResponse.json({ success: true, data, campaignData, adsRunningMcats });
   } catch (error: any) {
     console.error('Error fetching Redshift data:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

@@ -31,6 +31,10 @@ export default function McatWeeklyPerformanceTab() {
   const [selectedWeek, setSelectedWeek] = useState<string>('');
   const [granularity, setGranularity] = useState<'group' | 'pmcat' | 'mcat'>('mcat');
   
+  // Compare Mode State
+  const [isCompareMode, setIsCompareMode] = useState<boolean>(false);
+  const [compareWeeksCount, setCompareWeeksCount] = useState<number>(4);
+
   // Cascading Filters
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [selectedPmcat, setSelectedPmcat] = useState<string>('all');
@@ -38,7 +42,6 @@ export default function McatWeeklyPerformanceTab() {
 
   const [rankMetric, setRankMetric] = useState<string>('ctr');
 
-  // Ensure rankMetric is valid for current granularity
   useEffect(() => {
     if (granularity === 'mcat' && (rankMetric === 'mcat_diversity_pct' || rankMetric === 'pmcat_diversity_pct')) {
       setRankMetric('ctr');
@@ -56,7 +59,6 @@ export default function McatWeeklyPerformanceTab() {
   }, [granularity]);
 
   useEffect(() => {
-    // Fetch both Redshift data and Hierarchy JSON
     Promise.all([
       fetch('/api/mcat-weekly-performance').then(r => r.json()),
       fetch('/mcat_hierarchy.json').then(r => r.json()).catch(() => ({}))
@@ -68,9 +70,8 @@ export default function McatWeeklyPerformanceTab() {
         setCampaignData(resRedshift.campaignData || []);
         setAdsRunningMcats(resRedshift.adsRunningMcats || []);
 
-        // Default week
-        const weeks = Array.from(new Set(resRedshift.data.map((d: any) => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a));
-        if (weeks.length > 0) setSelectedWeek(weeks[0] as string);
+        const weeksArr = Array.from(new Set(resRedshift.data.map((d: any) => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a));
+        if (weeksArr.length > 0) setSelectedWeek(weeksArr[0] as string);
       } else {
         setError(resRedshift.error || 'Failed to fetch Redshift data');
       }
@@ -82,7 +83,6 @@ export default function McatWeeklyPerformanceTab() {
     });
   }, []);
 
-  // Enriched Data (Join Redshift with Hierarchy)
   const enrichedData = useMemo(() => {
     return data.map(d => {
       const lookupKey = d.mcat ? d.mcat.toString().trim().toLowerCase() : '';
@@ -117,7 +117,11 @@ export default function McatWeeklyPerformanceTab() {
 
   const weeks = useMemo(() => Array.from(new Set(data.map(d => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a)) as string[], [data]);
 
-  // Derive unique options for cascading dropdowns based on the selected week & hierarchy
+  const compareWeeksList = useMemo(() => {
+    if (weeks.length < 2) return [];
+    return weeks.slice(1, 1 + compareWeeksCount);
+  }, [weeks, compareWeeksCount]);
+
   const availableGroups = useMemo(() => {
     return Array.from(new Set(enrichedData.map(d => d.group))).sort();
   }, [enrichedData]);
@@ -135,19 +139,18 @@ export default function McatWeeklyPerformanceTab() {
     return Array.from(new Set(filtered.map(d => d.mcat))).sort();
   }, [enrichedData, selectedGroup, selectedPmcat]);
 
-  // Aggregate stats based on current cascading filters
-  const kpiStats = useMemo(() => {
-    let filtered = enrichedData.filter(d => d.week_start_date === selectedWeek);
-    
+  // Base filtered data before selecting a specific week
+  const baseFilteredData = useMemo(() => {
+    let filtered = enrichedData;
     if (selectedGroup !== 'all') filtered = filtered.filter(d => d.group === selectedGroup);
     if (granularity !== 'group' && selectedPmcat !== 'all') filtered = filtered.filter(d => d.pmcat === selectedPmcat);
     if (granularity === 'mcat' && selectedMcat !== 'all') filtered = filtered.filter(d => d.mcat === selectedMcat);
+    return filtered;
+  }, [enrichedData, selectedGroup, selectedPmcat, selectedMcat, granularity]);
 
-    const totals = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0, mcat_diversity_pct: 0, pmcat_diversity_pct: 0 };
-    
+  const denominators = useMemo(() => {
     let mcatDenominator = 0;
     let pmcatDenominator = 0;
-
     if (granularity === 'group') {
       mcatDenominator = adsRunningMcats.filter(m => selectedGroup === 'all' || hierarchy[m.toLowerCase()]?.group === selectedGroup).length;
       pmcatDenominator = Array.from(adsRunningPmcatsSet).filter(p => selectedGroup === 'all' || pmcatToGroup.get(p) === selectedGroup).length;
@@ -159,7 +162,13 @@ export default function McatWeeklyPerformanceTab() {
         return matchGroup && matchPmcat;
       }).length;
     }
+    return { mcatDenominator, pmcatDenominator };
+  }, [granularity, selectedGroup, selectedPmcat, adsRunningMcats, adsRunningPmcatsSet, pmcatToGroup, hierarchy]);
 
+  const calcKpisForWeek = (week: string) => {
+    let filtered = baseFilteredData.filter(d => d.week_start_date === week);
+    const totals: any = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0, mcat_diversity_pct: 0, pmcat_diversity_pct: 0 };
+    
     const numeratorMcats = new Set<string>();
     const pmcatBlTotals = new Map<string, number>();
 
@@ -191,21 +200,81 @@ export default function McatWeeklyPerformanceTab() {
     totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
     totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
     totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
-    totals.mcat_diversity_pct = mcatDenominator > 0 ? (numeratorMcats.size / mcatDenominator) * 100 : 0;
-    totals.pmcat_diversity_pct = pmcatDenominator > 0 ? (pmcatNumerator / pmcatDenominator) * 100 : 0;
+    totals.mcat_diversity_pct = denominators.mcatDenominator > 0 ? (numeratorMcats.size / denominators.mcatDenominator) * 100 : 0;
+    totals.pmcat_diversity_pct = denominators.pmcatDenominator > 0 ? (pmcatNumerator / denominators.pmcatDenominator) * 100 : 0;
     return totals;
-  }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, selectedMcat, adsRunningMcats, adsRunningSet, adsRunningPmcatsSet, pmcatToGroup, hierarchy]);
+  };
 
-  // Roll up data by Granularity for the Ranking Analysis
-  const rankingData = useMemo(() => {
-    // Start with the selected week
-    let weeklyData = enrichedData.filter(d => d.week_start_date === selectedWeek);
+  // Standard Week KPI calculation
+  const kpiStats = useMemo(() => calcKpisForWeek(selectedWeek), [selectedWeek, baseFilteredData, denominators, adsRunningSet, adsRunningPmcatsSet, granularity]);
+
+  // Compare Mode Calculations
+  const compareData = useMemo(() => {
+    return compareWeeksList.map(week => {
+      return { week, stats: calcKpisForWeek(week) };
+    });
+  }, [compareWeeksList, baseFilteredData, denominators, adsRunningSet, adsRunningPmcatsSet, granularity]);
+
+  const bestKpis = useMemo(() => {
+    if (compareData.length === 0) return null;
+    const best = { ...compareData[0].stats };
+    compareData.forEach(d => {
+      Object.keys(best).forEach(k => {
+        if (k === 'cost' || k === 'cost_per_txn') {
+          // Lower is better (excluding zeroes if possible, but keeping logic simple for now)
+          if (d.stats[k] > 0 && (d.stats[k] < best[k] || best[k] === 0)) {
+            best[k] = d.stats[k];
+          }
+        } else {
+           // Higher is better
+          if (d.stats[k] > best[k]) {
+             best[k] = d.stats[k];
+          }
+        }
+      });
+    });
+    return best;
+  }, [compareData]);
+
+  const formatVal = (val: number, metric: string) => {
+    if (metric === 'cost' || metric === 'cost_per_txn') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'mcat_diversity_pct' || metric === 'pmcat_diversity_pct') return `${val.toFixed(1)}%`;
+    return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  };
+
+  const getEntityTitle = () => {
+    if (granularity === 'group') return selectedGroup === 'all' ? 'All Groups' : selectedGroup;
+    if (granularity === 'pmcat') return selectedPmcat === 'all' ? (selectedGroup === 'all' ? 'All PMCATs' : `PMCATs in ${selectedGroup}`) : selectedPmcat;
+    return selectedMcat === 'all' ? (selectedPmcat === 'all' ? 'All MCATs' : `MCATs in ${selectedPmcat}`) : selectedMcat;
+  };
+
+  const downloadCompareCsv = () => {
+    let csv = `Metric,${compareWeeksList.join(',')}\n`;
+    activeMetrics.forEach(m => {
+       let row = `${m.label},`;
+       row += compareData.map(d => formatVal(d.stats[m.key], m.key).replace(/,/g, '')).join(',');
+       csv += row + '\n';
+    });
     
-    // Apply higher-level filters if selected
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `compare_${getEntityTitle().replace(/ /g, '_')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Roll up data for Ranking Analysis (only used in Standard Mode)
+  const rankingData = useMemo(() => {
+    if (isCompareMode) return { top10: [], bottom10: [] };
+
+    let weeklyData = enrichedData.filter(d => d.week_start_date === selectedWeek);
     if (selectedGroup !== 'all') weeklyData = weeklyData.filter(d => d.group === selectedGroup);
     if (granularity === 'mcat' && selectedPmcat !== 'all') weeklyData = weeklyData.filter(d => d.pmcat === selectedPmcat);
 
-    // Pre-calculate denominator per group/pmcat
     const denomMapMcat = new Map<string, number>();
     const denomMapPmcat = new Map<string, number>();
     
@@ -225,7 +294,6 @@ export default function McatWeeklyPerformanceTab() {
       });
     }
 
-    // Roll up logic
     const rolledUp = new Map<string, any>();
     
     weeklyData.forEach(d => {
@@ -285,17 +353,35 @@ export default function McatWeeklyPerformanceTab() {
       top10: sorted.slice(0, 10),
       bottom10: bottomSorted.slice(0, 10)
     };
-  }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, rankMetric, adsRunningMcats, adsRunningSet, adsRunningPmcatsSet, pmcatToGroup, hierarchy]);
+  }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, rankMetric, adsRunningMcats, adsRunningSet, adsRunningPmcatsSet, pmcatToGroup, hierarchy, isCompareMode]);
 
-  // AI Insights Generation
   const aiInsights = useMemo(() => {
+    if (isCompareMode) {
+      if (compareData.length === 0) return [];
+      const insights = [];
+      const recentCtr = compareData[0].stats.ctr;
+      const oldCtr = compareData[compareData.length - 1].stats.ctr;
+      
+      if (recentCtr > oldCtr) {
+         insights.push(`Positive Trend: CTR has improved from ${oldCtr.toFixed(1)}% to ${recentCtr.toFixed(1)}% over the selected weeks.`);
+      } else if (recentCtr < oldCtr) {
+         insights.push(`Attention Required: CTR has declined from ${oldCtr.toFixed(1)}% to ${recentCtr.toFixed(1)}%. Consider refreshing creatives or adjusting bids.`);
+      }
+
+      const maxCostWeek = [...compareData].sort((a, b) => b.stats.cost - a.stats.cost)[0];
+      if (maxCostWeek && maxCostWeek.stats.cost > 0) {
+         insights.push(`Budget Check: Highest spend occurred during the week of ${maxCostWeek.week} (₹${maxCostWeek.stats.cost.toLocaleString(undefined, {maximumFractionDigits:0})}). Check if conversions aligned with this spend.`);
+      }
+      return insights;
+    }
+
+    // Standard Mode Insights
     if (rankingData.top10.length === 0) return [];
     
     const insights = [];
     const topPerformer = rankingData.top10[0];
     const topCost = [...rankingData.top10, ...rankingData.bottom10].sort((a,b) => b.cost - a.cost)[0];
     const avgCtr = kpiStats.ctr;
-
     const metricLabel = METRICS.find(m => m.key === rankMetric)?.label || rankMetric;
 
     insights.push(`Top Driver: ${topPerformer.name} is leading the selected group with the highest ${metricLabel}.`);
@@ -316,13 +402,7 @@ export default function McatWeeklyPerformanceTab() {
     }
 
     return insights;
-  }, [rankingData, rankMetric, kpiStats]);
-
-  const formatVal = (val: number, metric: string) => {
-    if (metric === 'cost' || metric === 'cost_per_txn') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'mcat_diversity_pct' || metric === 'pmcat_diversity_pct') return `${val.toFixed(1)}%`;
-    return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
-  };
+  }, [rankingData, rankMetric, kpiStats, isCompareMode, compareData]);
 
   const resetFilters = (level: string) => {
     if (level === 'group') {
@@ -353,12 +433,6 @@ export default function McatWeeklyPerformanceTab() {
     );
   }
 
-  const getEntityTitle = () => {
-    if (granularity === 'group') return selectedGroup === 'all' ? 'All Groups' : selectedGroup;
-    if (granularity === 'pmcat') return selectedPmcat === 'all' ? (selectedGroup === 'all' ? 'All PMCATs' : `PMCATs in ${selectedGroup}`) : selectedPmcat;
-    return selectedMcat === 'all' ? (selectedPmcat === 'all' ? 'All MCATs' : `MCATs in ${selectedPmcat}`) : selectedMcat;
-  };
-
   return (
     <div className="tab on">
       {/* Top Filter Bar */}
@@ -368,7 +442,7 @@ export default function McatWeeklyPerformanceTab() {
             <label>Granularity View</label>
             <select value={granularity} onChange={(e) => {
               setGranularity(e.target.value as any);
-              resetFilters('group'); // Reset filters when changing view level
+              resetFilters('group');
             }} style={{ background: 'var(--bg2)', border: '1px solid var(--teal)', color: 'var(--teal)' }}>
               <option value="group">Group Level</option>
               <option value="pmcat">PMCAT Level</option>
@@ -376,11 +450,28 @@ export default function McatWeeklyPerformanceTab() {
             </select>
           </div>
           <div>
-            <label>Week Starting</label>
-            <select value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)}>
-              {weeks.map(w => <option key={w} value={w}>{w}</option>)}
+            <label>View Mode</label>
+            <select value={isCompareMode ? 'compare' : 'standard'} onChange={(e) => setIsCompareMode(e.target.value === 'compare')} style={{ fontWeight: isCompareMode ? 'bold' : 'normal', color: isCompareMode ? '#ab47bc' : 'inherit' }}>
+              <option value="standard">Standard Week</option>
+              <option value="compare">Compare Mode 📊</option>
             </select>
           </div>
+
+          {!isCompareMode ? (
+            <div>
+              <label>Week Starting</label>
+              <select value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)}>
+                {weeks.map(w => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label>Compare Last (N) Weeks</label>
+              <select value={compareWeeksCount} onChange={(e) => setCompareWeeksCount(Number(e.target.value))}>
+                {[2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>{n} Weeks</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Cascading Filters */}
@@ -415,237 +506,350 @@ export default function McatWeeklyPerformanceTab() {
         </div>
       </div>
 
-      {/* KPI Summary Cards */}
-      <div className="banner" style={{ marginBottom: '18px' }}>
-        <div className="bn-left">
-          <div style={{ fontSize: '24px' }}>⚡</div>
-          <div>
-            <div className="bn-title" style={{ color: C.t }}>
-              {getEntityTitle()}
+      {isCompareMode && bestKpis ? (
+        <div className="compare-view">
+          {/* Best KPIs Banner */}
+          <div className="banner" style={{ marginBottom: '18px', background: 'linear-gradient(90deg, #1e1e24, #121216)', borderLeft: '4px solid #ab47bc' }}>
+            <div className="bn-left">
+              <div style={{ fontSize: '24px' }}>🏆</div>
+              <div>
+                <div className="bn-title" style={{ color: '#fff' }}>Best Ever KPIs</div>
+                <div className="bn-sub">Across {compareWeeksCount} weeks ({compareWeeksList[compareWeeksList.length-1]} to {compareWeeksList[0]})</div>
+              </div>
             </div>
-            <div className="bn-sub">Week of {selectedWeek} · Redshift DWH</div>
+            <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+              <div><div className="bn-val" style={{ color: C.b }}>{bestKpis.impressions.toLocaleString()}</div><div className="bn-lbl">Impressions</div></div>
+              <div><div className="bn-val" style={{ color: C.t }}>{bestKpis.clicks.toLocaleString()}</div><div className="bn-lbl">Clicks</div></div>
+              <div><div className="bn-val" style={{ color: C.g }}>{bestKpis.ctr.toFixed(1)}%</div><div className="bn-lbl">CTR</div></div>
+              <div><div className="bn-val" style={{ color: C.r }}>₹{bestKpis.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost (Min)</div></div>
+              <div><div className="bn-val" style={{ color: C.a }}>{bestKpis.conversions.toLocaleString()}</div><div className="bn-lbl">Conversions</div></div>
+              <div><div className="bn-val" style={{ color: '#29b6f6' }}>{bestKpis.txn_approved_pct.toFixed(1)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
+              <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{bestKpis.cost_per_txn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost/Txn (Min)</div></div>
+              {granularity !== 'mcat' && <div><div className="bn-val" style={{ color: '#ab47bc' }}>{bestKpis.mcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">MCAT Div.</div></div>}
+              {granularity === 'group' && <div><div className="bn-val" style={{ color: '#ec407a' }}>{bestKpis.pmcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">PMCAT Div.</div></div>}
+            </div>
           </div>
-        </div>
-        <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-          <div><div className="bn-val" style={{ color: C.b }}>{kpiStats.impressions.toLocaleString()}</div><div className="bn-lbl">Impressions</div></div>
-          <div><div className="bn-val" style={{ color: C.t }}>{kpiStats.clicks.toLocaleString()}</div><div className="bn-lbl">Clicks</div></div>
-          <div><div className="bn-val" style={{ color: C.g }}>{kpiStats.ctr.toFixed(1)}%</div><div className="bn-lbl">CTR</div></div>
-          <div><div className="bn-val" style={{ color: C.r }}>₹{kpiStats.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost (INR)</div></div>
-          <div><div className="bn-val" style={{ color: C.a }}>{kpiStats.conversions.toLocaleString()}</div><div className="bn-lbl">Conversions</div></div>
-          <div><div className="bn-val" style={{ color: C.p }}>{kpiStats.bl_approved.toLocaleString()}</div><div className="bn-lbl">BL Approved</div></div>
-          <div><div className="bn-val" style={{ color: '#66bb6a' }}>{kpiStats.bl_sold_approved.toLocaleString()}</div><div className="bn-lbl">BL Sold</div></div>
-          <div><div className="bn-val" style={{ color: C.d }}>{kpiStats.bl_txn_approved.toLocaleString()}</div><div className="bn-lbl">Txn Approved</div></div>
-          <div><div className="bn-val" style={{ color: '#ff8a65' }}>{kpiStats.blni.toLocaleString()}</div><div className="bn-lbl">BLNI</div></div>
-          <div><div className="bn-val" style={{ color: '#29b6f6' }}>{kpiStats.txn_approved_pct.toFixed(1)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
-          <div><div className="bn-val" style={{ color: '#ffca28' }}>{kpiStats.bl_sold_pct.toFixed(1)}%</div><div className="bn-lbl">BL Sold %</div></div>
-          <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{kpiStats.cost_per_txn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost / Txn</div></div>
-          {granularity !== 'mcat' && <div><div className="bn-val" style={{ color: '#ab47bc' }}>{kpiStats.mcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">MCAT Diversity</div></div>}
-          {granularity === 'group' && <div><div className="bn-val" style={{ color: '#ec407a' }}>{kpiStats.pmcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">PMCAT Diversity</div></div>}
-        </div>
-      </div>
 
-      {/* AI Insights Section */}
-      <div className="sh" style={{ marginTop: '30px' }}>
-        <h2>✨ AI Generated Insights <span>Based on selected filters</span></h2>
-      </div>
-      <div className="cc" style={{ margin: 0, marginBottom: '25px', background: 'var(--bg2)', border: '1px solid var(--teal)' }}>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {aiInsights.map((insight, i) => (
-            <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-              <span style={{ color: 'var(--teal)' }}>✦</span>
-              <span style={{ fontSize: '14px', lineHeight: '1.4' }}>{insight}</span>
-            </li>
-          ))}
-          {aiInsights.length === 0 && <li style={{ color: 'var(--muted)' }}>Not enough data to generate insights for this selection.</li>}
-        </ul>
-      </div>
+          <div className="sh" style={{ marginTop: '30px' }}>
+            <h2>✨ AI Generated Insights <span>Based on {compareWeeksCount} weeks trend</span></h2>
+          </div>
+          <div className="cc" style={{ margin: 0, marginBottom: '25px', background: 'var(--bg2)', border: '1px solid var(--teal)' }}>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {aiInsights.map((insight, i) => (
+                <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <span style={{ color: 'var(--teal)' }}>✦</span>
+                  <span style={{ fontSize: '14px', lineHeight: '1.4' }}>{insight}</span>
+                </li>
+              ))}
+              {aiInsights.length === 0 && <li style={{ color: 'var(--muted)' }}>Not enough data to generate insights.</li>}
+            </ul>
+          </div>
 
-      <div className="sh" style={{ marginTop: '30px' }}>
-        <h2>{granularity.toUpperCase()} Ranking Analysis <span>Week of {selectedWeek}</span></h2>
-      </div>
-
-      {/* Metric Selector for Rankings */}
-      <div className="ai-tabs" style={{ marginBottom: '20px' }}>
-        {activeMetrics.map(m => (
-          <button 
-            key={m.key} 
-            className={`ai-tab ${rankMetric === m.key ? 'on' : ''}`} 
-            onClick={() => setRankMetric(m.key)}
-          >
-            Rank by {m.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="cg" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
-        <div className="cc" style={{ margin: 0 }}>
-          <div className="ct">🏆 Top 10 {granularity.toUpperCase()}s</div>
-          <div className="cs">Highest {METRICS.find(m => m.key === rankMetric)?.label}</div>
-          <div className="tw" style={{ marginTop: '15px' }}>
-            <table className="dt">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>{granularity.toUpperCase()} Name</th>
-                  <th className="num">{METRICS.find(m => m.key === rankMetric)?.label}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rankingData.top10.map((item, idx) => (
-                  <tr key={item.name + idx}>
-                    <td style={{ color: 'var(--muted)', width: '40px' }}>#{idx + 1}</td>
-                    <td style={{ fontWeight: 500 }}>{item.name}</td>
-                    <td className="num hi">{formatVal(item[rankMetric], rankMetric)}</td>
+          <div className="cc" style={{ margin: 0, marginBottom: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <div>
+                <div className="ct">Metric Comparison Table</div>
+                <div className="cs">{getEntityTitle()}</div>
+              </div>
+              <button onClick={downloadCompareCsv} style={{ background: 'var(--teal)', color: '#000', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}>⬇ Download CSV</button>
+            </div>
+            <div className="tw">
+              <table className="dt">
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: '150px' }}>Metric</th>
+                    {compareWeeksList.map(w => <th key={w} style={{ textAlign: 'right' }}>{w}</th>)}
                   </tr>
-                ))}
-                {rankingData.top10.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No data</td></tr>}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {activeMetrics.map(m => (
+                    <tr key={m.key}>
+                      <td style={{ fontWeight: 500 }}>{m.label}</td>
+                      {compareData.map(d => (
+                        <td key={d.week} className="num">{formatVal(d.stats[m.key], m.key)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="cg" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <div className="cc" style={{ margin: 0 }}>
+              <div className="ct">Clicks vs Impressions Trend</div>
+              <ChartComponent
+                type="bar"
+                height={300}
+                data={{
+                  labels: [...compareWeeksList].reverse(),
+                  datasets: [
+                    {
+                      label: 'Impressions',
+                      data: [...compareData].reverse().map(d => d.stats.impressions),
+                      backgroundColor: C.b + '80'
+                    },
+                    {
+                      label: 'Clicks',
+                      data: [...compareData].reverse().map(d => d.stats.clicks),
+                      backgroundColor: C.t + '80'
+                    }
+                  ]
+                }}
+              />
+            </div>
+            <div className="cc" style={{ margin: 0 }}>
+              <div className="ct">CTR % Trend</div>
+              <ChartComponent
+                type="line"
+                height={300}
+                data={{
+                  labels: [...compareWeeksList].reverse(),
+                  datasets: [
+                    {
+                      label: 'CTR %',
+                      data: [...compareData].reverse().map(d => d.stats.ctr),
+                      borderColor: C.g,
+                      fill: false,
+                      tension: 0.3
+                    }
+                  ]
+                }}
+              />
+            </div>
           </div>
         </div>
-
-        <div className="cc" style={{ margin: 0 }}>
-          <div className="ct">⚠️ Bottom 10 {granularity.toUpperCase()}s</div>
-          <div className="cs">Lowest {METRICS.find(m => m.key === rankMetric)?.label} {rankMetric === 'ctr' ? '(Min 100 Impr)' : ''}</div>
-          <div className="tw" style={{ marginTop: '15px' }}>
-            <table className="dt">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>{granularity.toUpperCase()} Name</th>
-                  <th className="num">{METRICS.find(m => m.key === rankMetric)?.label}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rankingData.bottom10.map((item, idx) => (
-                  <tr key={item.name + idx}>
-                    <td style={{ color: 'var(--muted)', width: '40px' }}>#{idx + 1}</td>
-                    <td style={{ fontWeight: 500 }}>{item.name}</td>
-                    <td className="num bd">{formatVal(item[rankMetric], rankMetric)}</td>
-                  </tr>
-                ))}
-                {rankingData.bottom10.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No data</td></tr>}
-              </tbody>
-            </table>
+      ) : (
+        <>
+          {/* Standard View Mode */}
+          <div className="banner" style={{ marginBottom: '18px' }}>
+            <div className="bn-left">
+              <div style={{ fontSize: '24px' }}>⚡</div>
+              <div>
+                <div className="bn-title" style={{ color: C.t }}>
+                  {getEntityTitle()}
+                </div>
+                <div className="bn-sub">Week of {selectedWeek} · Redshift DWH</div>
+              </div>
+            </div>
+            <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+              <div><div className="bn-val" style={{ color: C.b }}>{kpiStats.impressions.toLocaleString()}</div><div className="bn-lbl">Impressions</div></div>
+              <div><div className="bn-val" style={{ color: C.t }}>{kpiStats.clicks.toLocaleString()}</div><div className="bn-lbl">Clicks</div></div>
+              <div><div className="bn-val" style={{ color: C.g }}>{kpiStats.ctr.toFixed(1)}%</div><div className="bn-lbl">CTR</div></div>
+              <div><div className="bn-val" style={{ color: C.r }}>₹{kpiStats.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost (INR)</div></div>
+              <div><div className="bn-val" style={{ color: C.a }}>{kpiStats.conversions.toLocaleString()}</div><div className="bn-lbl">Conversions</div></div>
+              <div><div className="bn-val" style={{ color: C.p }}>{kpiStats.bl_approved.toLocaleString()}</div><div className="bn-lbl">BL Approved</div></div>
+              <div><div className="bn-val" style={{ color: '#66bb6a' }}>{kpiStats.bl_sold_approved.toLocaleString()}</div><div className="bn-lbl">BL Sold</div></div>
+              <div><div className="bn-val" style={{ color: C.d }}>{kpiStats.bl_txn_approved.toLocaleString()}</div><div className="bn-lbl">Txn Approved</div></div>
+              <div><div className="bn-val" style={{ color: '#ff8a65' }}>{kpiStats.blni.toLocaleString()}</div><div className="bn-lbl">BLNI</div></div>
+              <div><div className="bn-val" style={{ color: '#29b6f6' }}>{kpiStats.txn_approved_pct.toFixed(1)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
+              <div><div className="bn-val" style={{ color: '#ffca28' }}>{kpiStats.bl_sold_pct.toFixed(1)}%</div><div className="bn-lbl">BL Sold %</div></div>
+              <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{kpiStats.cost_per_txn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost / Txn</div></div>
+              {granularity !== 'mcat' && <div><div className="bn-val" style={{ color: '#ab47bc' }}>{kpiStats.mcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">MCAT Diversity</div></div>}
+              {granularity === 'group' && <div><div className="bn-val" style={{ color: '#ec407a' }}>{kpiStats.pmcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">PMCAT Diversity</div></div>}
+            </div>
           </div>
-        </div>
-      </div>
-      
-      {/* Time-Series Trend */}
-      <div className="sh" style={{ marginTop: '30px' }}>
-        <h2>12-Week Trend <span>{getEntityTitle()}</span></h2>
-      </div>
-      <div className="cg" style={{ gridTemplateColumns: '2fr 1fr' }}>
-        <div className="cc w" style={{ gridColumn: 'span 1' }}>
-          <div className="ct">Clicks & Impressions Trend</div>
-          <ChartComponent 
-            type="line" 
-            height={300}
-            data={{
-              labels: weeks.slice().reverse(),
-              datasets: [
-                {
-                  label: 'Impressions',
-                  data: weeks.slice().reverse().map(w => {
-                    let wData = enrichedData.filter(d => d.week_start_date === w);
-                    if (selectedGroup !== 'all') wData = wData.filter(d => d.group === selectedGroup);
-                    if (granularity !== 'group' && selectedPmcat !== 'all') wData = wData.filter(d => d.pmcat === selectedPmcat);
-                    if (granularity === 'mcat' && selectedMcat !== 'all') wData = wData.filter(d => d.mcat === selectedMcat);
-                    return wData.reduce((sum, d) => sum + d.impressions, 0);
-                  }),
-                  borderColor: C.b,
-                  backgroundColor: C.b + '18',
-                  yAxisID: 'y',
-                  tension: 0.35,
-                  fill: true
-                },
-                {
-                  label: 'Clicks',
-                  data: weeks.slice().reverse().map(w => {
-                    let wData = enrichedData.filter(d => d.week_start_date === w);
-                    if (selectedGroup !== 'all') wData = wData.filter(d => d.group === selectedGroup);
-                    if (granularity !== 'group' && selectedPmcat !== 'all') wData = wData.filter(d => d.pmcat === selectedPmcat);
-                    if (granularity === 'mcat' && selectedMcat !== 'all') wData = wData.filter(d => d.mcat === selectedMcat);
-                    return wData.reduce((sum, d) => sum + d.clicks, 0);
-                  }),
-                  borderColor: C.t,
-                  backgroundColor: C.t + '18',
-                  yAxisID: 'y1',
-                  tension: 0.35,
-                  fill: true
-                }
-              ]
-            }} 
-            options={{
-              scales: {
-                y: { type: 'linear', display: true, position: 'left' },
-                y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false } }
-              }
-            }} 
-          />
-        </div>
-        <div className="cc" style={{ gridColumn: 'span 1' }}>
-          <div className="ct">CTR % Trend</div>
-          <ChartComponent 
-            type="line" 
-            height={300}
-            data={{
-              labels: weeks.slice().reverse(),
-              datasets: [{
-                label: 'CTR%',
-                data: weeks.slice().reverse().map(w => {
-                  let wData = enrichedData.filter(d => d.week_start_date === w);
-                  if (selectedGroup !== 'all') wData = wData.filter(d => d.group === selectedGroup);
-                  if (granularity !== 'group' && selectedPmcat !== 'all') wData = wData.filter(d => d.pmcat === selectedPmcat);
-                  if (granularity === 'mcat' && selectedMcat !== 'all') wData = wData.filter(d => d.mcat === selectedMcat);
-                  const imp = wData.reduce((sum, d) => sum + d.impressions, 0);
-                  const clk = wData.reduce((sum, d) => sum + d.clicks, 0);
-                  return imp > 0 ? (clk / imp) * 100 : 0;
-                }),
-                borderColor: C.g,
-                tension: 0.35,
-                fill: false
-              }]
-            }} 
-          />
-        </div>
-      </div>
 
-      {/* Campaign Conversion Analysis */}
-      <div className="sh" style={{ marginTop: '30px' }}>
-        <h2>Campaign Conversions (by MCAT ID) <span>From mcat_ads_campaign</span></h2>
-      </div>
-      <div className="tw cc">
-        <table className="dt">
-          <thead>
-            <tr>
-              <th>MCAT ID</th>
-              <th className="num">BL Approved</th>
-              <th className="num">BL Sold</th>
-              <th className="num">Txn</th>
-              <th className="num">BLNI</th>
-              <th className="num">Cost (INR)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {campaignData
-              .filter(d => d.week_start_date === selectedWeek)
-              .sort((a,b) => b.bl_approved - a.bl_approved)
-              .slice(0, 50)
-              .map((item, idx) => (
-              <tr key={item.mcat_id + idx}>
-                <td style={{ fontWeight: 500 }}>{item.mcat_id}</td>
-                <td className="num">{item.bl_approved.toLocaleString()}</td>
-                <td className="num">{item.bl_sold_approved.toLocaleString()}</td>
-                <td className="num">{item.bl_txn_approved.toLocaleString()}</td>
-                <td className="num">{item.blni.toLocaleString()}</td>
-                <td className="num">₹{item.total_cost_inr.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
-              </tr>
+          <div className="sh" style={{ marginTop: '30px' }}>
+            <h2>✨ AI Generated Insights <span>Based on selected filters</span></h2>
+          </div>
+          <div className="cc" style={{ margin: 0, marginBottom: '25px', background: 'var(--bg2)', border: '1px solid var(--teal)' }}>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {aiInsights.map((insight, i) => (
+                <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <span style={{ color: 'var(--teal)' }}>✦</span>
+                  <span style={{ fontSize: '14px', lineHeight: '1.4' }}>{insight}</span>
+                </li>
+              ))}
+              {aiInsights.length === 0 && <li style={{ color: 'var(--muted)' }}>Not enough data to generate insights for this selection.</li>}
+            </ul>
+          </div>
+
+          <div className="sh" style={{ marginTop: '30px' }}>
+            <h2>{granularity.toUpperCase()} Ranking Analysis <span>Week of {selectedWeek}</span></h2>
+          </div>
+
+          <div className="ai-tabs" style={{ marginBottom: '20px' }}>
+            {activeMetrics.map(m => (
+              <button 
+                key={m.key} 
+                className={`ai-tab ${rankMetric === m.key ? 'on' : ''}`} 
+                onClick={() => setRankMetric(m.key)}
+              >
+                Rank by {m.label}
+              </button>
             ))}
-            {campaignData.filter(d => d.week_start_date === selectedWeek).length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center' }}>No data</td></tr>}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          <div className="cg" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
+            <div className="cc" style={{ margin: 0 }}>
+              <div className="ct">🏆 Top 10 {granularity.toUpperCase()}s</div>
+              <div className="cs">Highest {METRICS.find(m => m.key === rankMetric)?.label}</div>
+              <div className="tw" style={{ marginTop: '15px' }}>
+                <table className="dt">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>{granularity.toUpperCase()} Name</th>
+                      <th className="num">{METRICS.find(m => m.key === rankMetric)?.label}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rankingData.top10.map((item, idx) => (
+                      <tr key={item.name + idx}>
+                        <td style={{ color: 'var(--muted)', width: '40px' }}>#{idx + 1}</td>
+                        <td style={{ fontWeight: 500 }}>{item.name}</td>
+                        <td className="num hi">{formatVal(item[rankMetric], rankMetric)}</td>
+                      </tr>
+                    ))}
+                    {rankingData.top10.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No data</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="cc" style={{ margin: 0 }}>
+              <div className="ct">⚠️ Bottom 10 {granularity.toUpperCase()}s</div>
+              <div className="cs">Lowest {METRICS.find(m => m.key === rankMetric)?.label} {rankMetric === 'ctr' ? '(Min 100 Impr)' : ''}</div>
+              <div className="tw" style={{ marginTop: '15px' }}>
+                <table className="dt">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>{granularity.toUpperCase()} Name</th>
+                      <th className="num">{METRICS.find(m => m.key === rankMetric)?.label}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rankingData.bottom10.map((item, idx) => (
+                      <tr key={item.name + idx}>
+                        <td style={{ color: 'var(--muted)', width: '40px' }}>#{idx + 1}</td>
+                        <td style={{ fontWeight: 500 }}>{item.name}</td>
+                        <td className="num bd">{formatVal(item[rankMetric], rankMetric)}</td>
+                      </tr>
+                    ))}
+                    {rankingData.bottom10.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No data</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          
+          <div className="sh" style={{ marginTop: '30px' }}>
+            <h2>12-Week Trend <span>{getEntityTitle()}</span></h2>
+          </div>
+          <div className="cg" style={{ gridTemplateColumns: '2fr 1fr' }}>
+            <div className="cc w" style={{ gridColumn: 'span 1' }}>
+              <div className="ct">Clicks & Impressions Trend</div>
+              <ChartComponent 
+                type="line" 
+                height={300}
+                data={{
+                  labels: weeks.slice().reverse(),
+                  datasets: [
+                    {
+                      label: 'Impressions',
+                      data: weeks.slice().reverse().map(w => {
+                        let wData = enrichedData.filter(d => d.week_start_date === w);
+                        if (selectedGroup !== 'all') wData = wData.filter(d => d.group === selectedGroup);
+                        if (granularity !== 'group' && selectedPmcat !== 'all') wData = wData.filter(d => d.pmcat === selectedPmcat);
+                        if (granularity === 'mcat' && selectedMcat !== 'all') wData = wData.filter(d => d.mcat === selectedMcat);
+                        return wData.reduce((sum, d) => sum + d.impressions, 0);
+                      }),
+                      borderColor: C.b,
+                      backgroundColor: C.b + '18',
+                      yAxisID: 'y',
+                      tension: 0.35,
+                      fill: true
+                    },
+                    {
+                      label: 'Clicks',
+                      data: weeks.slice().reverse().map(w => {
+                        let wData = enrichedData.filter(d => d.week_start_date === w);
+                        if (selectedGroup !== 'all') wData = wData.filter(d => d.group === selectedGroup);
+                        if (granularity !== 'group' && selectedPmcat !== 'all') wData = wData.filter(d => d.pmcat === selectedPmcat);
+                        if (granularity === 'mcat' && selectedMcat !== 'all') wData = wData.filter(d => d.mcat === selectedMcat);
+                        return wData.reduce((sum, d) => sum + d.clicks, 0);
+                      }),
+                      borderColor: C.t,
+                      backgroundColor: C.t + '18',
+                      yAxisID: 'y1',
+                      tension: 0.35,
+                      fill: true
+                    }
+                  ]
+                }} 
+                options={{
+                  scales: {
+                    y: { type: 'linear', display: true, position: 'left' },
+                    y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false } }
+                  }
+                }} 
+              />
+            </div>
+            <div className="cc" style={{ gridColumn: 'span 1' }}>
+              <div className="ct">CTR % Trend</div>
+              <ChartComponent 
+                type="line" 
+                height={300}
+                data={{
+                  labels: weeks.slice().reverse(),
+                  datasets: [{
+                    label: 'CTR%',
+                    data: weeks.slice().reverse().map(w => {
+                      let wData = enrichedData.filter(d => d.week_start_date === w);
+                      if (selectedGroup !== 'all') wData = wData.filter(d => d.group === selectedGroup);
+                      if (granularity !== 'group' && selectedPmcat !== 'all') wData = wData.filter(d => d.pmcat === selectedPmcat);
+                      if (granularity === 'mcat' && selectedMcat !== 'all') wData = wData.filter(d => d.mcat === selectedMcat);
+                      const imp = wData.reduce((sum, d) => sum + d.impressions, 0);
+                      const clk = wData.reduce((sum, d) => sum + d.clicks, 0);
+                      return imp > 0 ? (clk / imp) * 100 : 0;
+                    }),
+                    borderColor: C.g,
+                    tension: 0.35,
+                    fill: false
+                  }]
+                }} 
+              />
+            </div>
+          </div>
+
+          <div className="sh" style={{ marginTop: '30px' }}>
+            <h2>Campaign Conversions (by MCAT ID) <span>From mcat_ads_campaign</span></h2>
+          </div>
+          <div className="tw cc">
+            <table className="dt">
+              <thead>
+                <tr>
+                  <th>MCAT ID</th>
+                  <th className="num">BL Approved</th>
+                  <th className="num">BL Sold</th>
+                  <th className="num">Txn</th>
+                  <th className="num">BLNI</th>
+                  <th className="num">Cost (INR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {campaignData
+                  .filter(d => d.week_start_date === selectedWeek)
+                  .sort((a,b) => b.bl_approved - a.bl_approved)
+                  .slice(0, 50)
+                  .map((item, idx) => (
+                  <tr key={item.mcat_id + idx}>
+                    <td style={{ fontWeight: 500 }}>{item.mcat_id}</td>
+                    <td className="num">{item.bl_approved.toLocaleString()}</td>
+                    <td className="num">{item.bl_sold_approved.toLocaleString()}</td>
+                    <td className="num">{item.bl_txn_approved.toLocaleString()}</td>
+                    <td className="num">{item.blni.toLocaleString()}</td>
+                    <td className="num">₹{item.total_cost_inr.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+                  </tr>
+                ))}
+                {campaignData.filter(d => d.week_start_date === selectedWeek).length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center' }}>No data</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

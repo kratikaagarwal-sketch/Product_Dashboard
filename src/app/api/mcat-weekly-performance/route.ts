@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import fs from 'fs';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-const pool = new Pool({
+declare global {
+  var pool: Pool | undefined;
+  var devPool: Pool | undefined;
+}
+
+const poolConfig = {
   host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
   user: 'rd_mktplace_pwrbi',
   password: 'p83z28CjbMjA',
@@ -14,9 +21,9 @@ const pool = new Pool({
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
-});
+};
 
-const devPool = new Pool({
+const devPoolConfig = {
   host: 'bi-dwh-redshift-development.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
   user: 'rd_kishalay_113578',
   password: 'Vt4r4024J4ii',
@@ -26,7 +33,42 @@ const devPool = new Pool({
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
+};
+
+let pool: Pool;
+let devPool: Pool;
+
+if (process.env.NODE_ENV === 'production') {
+  pool = new Pool(poolConfig);
+  devPool = new Pool(devPoolConfig);
+} else {
+  if (!globalThis.pool) {
+    globalThis.pool = new Pool(poolConfig);
+  }
+  if (!globalThis.devPool) {
+    globalThis.devPool = new Pool(devPoolConfig);
+  }
+  pool = globalThis.pool;
+  devPool = globalThis.devPool;
+}
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on production pool idle client:', err);
 });
+
+devPool.on('error', (err) => {
+  console.error('Unexpected error on development pool idle client:', err);
+});
+
+function debugLog(msg: string) {
+  try {
+    const logPath = path.join(process.cwd(), 'api-debug.log');
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch (e) {
+    console.error('Failed to write debug log:', e);
+  }
+}
+
 
 function extractDateString(val: any): string {
   if (!val) return '';
@@ -109,17 +151,21 @@ AND lower(a.iil_google_ads_lable_name) IN ('high', 'low', 'medium');
 `;
 
 export async function GET() {
+  debugLog('GET request received');
   try {
+    debugLog('Executing Redshift queries...');
+    const t0 = Date.now();
     const [res1, res2, res3, res4] = await Promise.all([
       pool.query(query1),
       pool.query(query2),
       pool.query(query3),
       devPool.query(query4)
     ]);
+    debugLog(`Queries done in ${Date.now() - t0} ms. Row counts: res1=${res1?.rows?.length}, res2=${res2?.rows?.length}, res3=${res3?.rows?.length}, res4=${res4?.rows?.length}`);
 
     const mergedMap = new Map();
 
-    // Map rows for the first query
+    debugLog('Mapping res1...');
     res1.rows.forEach(row => {
       const clicks = parseInt(row.total_clicks, 10) || 0;
       const impressions = parseInt(row.total_impressions, 10) || 0;
@@ -147,8 +193,9 @@ export async function GET() {
         blni: 0
       });
     });
+    debugLog(`res1 mapping complete. mergedMap size: ${mergedMap.size}`);
 
-    // Map rows for the third query and merge with the first query data
+    debugLog('Mapping res3...');
     res3.rows.forEach(row => {
       const weekStr = extractDateString(row.week_start_date);
 
@@ -182,10 +229,11 @@ export async function GET() {
         });
       }
     });
+    debugLog(`res3 mapping complete. mergedMap size: ${mergedMap.size}`);
 
     const data = Array.from(mergedMap.values());
 
-    // Map rows for the second query
+    debugLog('Mapping res2...');
     const campaignData = res2.rows.map(row => {
       const weekStr = extractDateString(row.week_start_date);
 
@@ -199,12 +247,18 @@ export async function GET() {
         total_cost_inr: parseFloat(row.total_cost_inr) || 0
       };
     });
+    debugLog(`res2 mapping complete. campaignData count: ${campaignData.length}`);
 
+    debugLog('Mapping res4...');
     const adsRunningMcats = res4.rows.map(row => row.glcat_mcat_name || 'Unknown');
+    debugLog(`res4 mapping complete. adsRunningMcats count: ${adsRunningMcats.length}`);
 
-    return NextResponse.json({ success: true, data, campaignData, adsRunningMcats });
+    debugLog('Returning JSON response...');
+    const response = NextResponse.json({ success: true, data, campaignData, adsRunningMcats });
+    debugLog('JSON response created successfully');
+    return response;
   } catch (error: any) {
-    console.error('Error fetching Redshift data:', error);
+    debugLog(`ERROR CAUGHT: ${error.message}\nStack: ${error.stack}`);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

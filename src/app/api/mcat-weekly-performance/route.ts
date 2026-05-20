@@ -109,8 +109,8 @@ export async function GET(request: Request) {
     let interval = '12 weeks';
     let query1Date = `DATE_TRUNC('week', report_date + INTERVAL '1 day')::date - INTERVAL '1 day' AS week_start_date`;
     let query1Interval = `12 weeks`;
-    let query2Date = `DATE_TRUNC('week', st_date) AS week_start_date`;
-    let query3Date = `a.st_date AS week_start_date`;
+    let query2Date = `(st_date - INTERVAL '7 days')::date AS week_start_date`;
+    let query3Date = `(a.st_date - INTERVAL '7 days')::date AS week_start_date`;
 
     if (period === 'daily') {
       flag = 'd';

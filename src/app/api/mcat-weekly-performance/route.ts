@@ -121,9 +121,9 @@ export async function GET(request: Request) {
       query3Date = `a.st_date::date AS week_start_date`;
     } else if (period === 'monthly') {
       flag = 'm';
-      interval = '12 months';
+      interval = '365 days';
       query1Date = `DATE_TRUNC('month', report_date)::date AS week_start_date`;
-      query1Interval = `12 months`;
+      query1Interval = `365 days`;
       query2Date = `DATE_TRUNC('month', st_date)::date AS week_start_date`;
       query3Date = `DATE_TRUNC('month', a.st_date)::date AS week_start_date`;
     }

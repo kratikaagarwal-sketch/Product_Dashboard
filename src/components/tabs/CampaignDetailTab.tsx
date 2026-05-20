@@ -60,8 +60,9 @@ export default function CampaignDetailTab() {
   }, [granularity]);
 
   useEffect(() => {
+    setLoading(true);
     Promise.all([
-      fetch('/api/mcat-weekly-performance').then(r => r.json()),
+      fetch(`/api/mcat-weekly-performance?period=${timePeriod}`).then(r => r.json()),
       fetch('/mcat_hierarchy.json').then(r => r.json()).catch(() => ({}))
     ])
     .then(([resRedshift, resHierarchy]) => {
@@ -71,8 +72,12 @@ export default function CampaignDetailTab() {
         setCampaignData(resRedshift.campaignData || []);
         setAdsRunningMcats(resRedshift.adsRunningMcats || []);
 
-        const weeksArr = Array.from(new Set(resRedshift.data.map((d: any) => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a));
-        if (weeksArr.length > 0) setSelectedWeek(weeksArr[0] as string);
+        const dateArr = Array.from(new Set(resRedshift.data.map((d: any) => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a));
+        if (dateArr.length > 0) {
+          setSelectedWeek(dateArr[0] as string);
+        } else {
+          setSelectedWeek('');
+        }
       } else {
         setError(resRedshift.error || 'Failed to fetch Redshift data');
       }
@@ -82,7 +87,7 @@ export default function CampaignDetailTab() {
       setError(err.message);
       setLoading(false);
     });
-  }, []);
+  }, [timePeriod]);
 
   const enrichedData = useMemo(() => {
     return data.map(d => {
@@ -466,24 +471,24 @@ export default function CampaignDetailTab() {
             </select>
           </div>
 
-          {timePeriod === 'weekly' && (
-            <>
-              {!isCompareMode ? (
-                <div>
-                  <label>Week Starting</label>
-                  <select value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)}>
-                    {weeks.map(w => <option key={w} value={w}>{w}</option>)}
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <label>Compare Last (N) Weeks</label>
-                  <select value={compareWeeksCount} onChange={(e) => setCompareWeeksCount(Number(e.target.value))}>
-                    {[2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>{n} Weeks</option>)}
-                  </select>
-                </div>
-              )}
-            </>
+          {!isCompareMode ? (
+            <div>
+              <label>{timePeriod === 'weekly' ? 'Week Starting' : timePeriod === 'daily' ? 'Date' : 'Month'}</label>
+              <select value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)}>
+                {weeks.map(w => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label>Compare Last (N) {timePeriod === 'weekly' ? 'Weeks' : timePeriod === 'daily' ? 'Days' : 'Months'}</label>
+              <select value={compareWeeksCount} onChange={(e) => setCompareWeeksCount(Number(e.target.value))}>
+                {[2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                  <option key={n} value={n}>
+                    {n} {timePeriod === 'weekly' ? 'Weeks' : timePeriod === 'daily' ? 'Days' : 'Months'}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
 
@@ -519,13 +524,7 @@ export default function CampaignDetailTab() {
         </div>
       </div>
 
-      {timePeriod !== 'weekly' ? (
-        <div className="cc" style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--muted)' }}>
-          <div style={{ fontSize: '30px', marginBottom: '15px' }}>📅</div>
-          <h3>No Data Available</h3>
-          <p>The {timePeriod} data view is currently empty. Please select the "Weekly" time period to view campaign details.</p>
-        </div>
-      ) : isCompareMode && bestKpis ? (
+      {isCompareMode && bestKpis ? (
         <div className="compare-view">
           {/* Best KPIs Banner */}
           <div className="banner" style={{ marginBottom: '18px', background: 'linear-gradient(90deg, #1e1e24, #121216)', borderLeft: '4px solid #ab47bc' }}>
@@ -533,7 +532,7 @@ export default function CampaignDetailTab() {
               <div style={{ fontSize: '24px' }}>🏆</div>
               <div>
                 <div className="bn-title" style={{ color: '#fff' }}>Best Ever KPIs</div>
-                <div className="bn-sub">Across {compareWeeksCount} weeks ({compareWeeksList[compareWeeksList.length-1]} to {compareWeeksList[0]})</div>
+                <div className="bn-sub">Across {compareWeeksCount} {timePeriod === 'weekly' ? 'weeks' : timePeriod === 'daily' ? 'days' : 'months'} ({compareWeeksList[compareWeeksList.length-1]} to {compareWeeksList[0]})</div>
               </div>
             </div>
             <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
@@ -550,7 +549,7 @@ export default function CampaignDetailTab() {
           </div>
 
           <div className="sh" style={{ marginTop: '30px' }}>
-            <h2>✨ AI Generated Insights <span>Based on {compareWeeksCount} weeks trend</span></h2>
+            <h2>✨ AI Generated Insights <span>Based on {compareWeeksCount} {timePeriod === 'weekly' ? 'weeks' : timePeriod === 'daily' ? 'days' : 'months'} trend</span></h2>
           </div>
           <div className="cc" style={{ margin: 0, marginBottom: '25px', background: 'var(--bg2)', border: '1px solid var(--teal)' }}>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -648,7 +647,7 @@ export default function CampaignDetailTab() {
                 <div className="bn-title" style={{ color: C.t }}>
                   {getEntityTitle()}
                 </div>
-                <div className="bn-sub">Week of {selectedWeek} · Redshift DWH</div>
+                <div className="bn-sub">{timePeriod === 'weekly' ? 'Week' : timePeriod === 'daily' ? 'Date' : 'Month'} of {selectedWeek} · Redshift DWH</div>
               </div>
             </div>
             <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
@@ -685,7 +684,7 @@ export default function CampaignDetailTab() {
           </div>
 
           <div className="sh" style={{ marginTop: '30px' }}>
-            <h2>{granularity.toUpperCase()} Ranking Analysis <span>Week of {selectedWeek}</span></h2>
+            <h2>{granularity.toUpperCase()} Ranking Analysis <span>{timePeriod === 'weekly' ? 'Week' : timePeriod === 'daily' ? 'Date' : 'Month'} of {selectedWeek}</span></h2>
           </div>
 
           <div className="ai-tabs" style={{ marginBottom: '20px' }}>
@@ -755,7 +754,7 @@ export default function CampaignDetailTab() {
           </div>
           
           <div className="sh" style={{ marginTop: '30px' }}>
-            <h2>12-Week Trend <span>{getEntityTitle()}</span></h2>
+            <h2>{timePeriod === 'weekly' ? '12-Week Trend' : timePeriod === 'daily' ? '30-Day Trend' : '12-Month Trend'} <span>{getEntityTitle()}</span></h2>
           </div>
           <div className="cg" style={{ gridTemplateColumns: '2fr 1fr' }}>
             <div className="cc w" style={{ gridColumn: 'span 1' }}>

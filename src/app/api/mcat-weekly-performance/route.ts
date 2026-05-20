@@ -82,57 +82,6 @@ function extractDateString(val: any): string {
   return '';
 }
 
-const query1 = `
-SELECT 
-    DATE_TRUNC('week', report_date + INTERVAL '1 day')::date - INTERVAL '1 day' AS week_start_date,
-    segments_product_type_l4 AS mcat_name,
-    SUM(total_clicks) AS total_clicks,
-    SUM(total_impressions) AS total_impressions,
-    SUM(total_cost_inr) AS total_cost_inr,
-    SUM(total_conversions) AS total_conversions
-FROM im_datamart_bigquery.fact_bigquery_product_ads
-WHERE report_date >= (SELECT MAX(report_date) FROM im_datamart_bigquery.fact_bigquery_product_ads) - INTERVAL '12 weeks'
-GROUP BY 1, 2
-ORDER BY 1 DESC, 2;
-`;
-
-const query2 = `
-SELECT
-    DATE_TRUNC('week', st_date) AS week_start_date,
-    mcat_id AS eto_ofr_mcat_id,
-    SUM(bl_approved) AS bl_approved,
-    SUM(bl_sold) AS bl_sold_approved,
-    SUM(trans) AS bl_txn_approved,
-    SUM(blni) AS blni,
-    SUM(total_cost_inr) AS total_cost_inr
-FROM im_datamart_category.mcat_ads_campaign
-WHERE
-    time_period_flag = 'w'
-    AND st_date >= CURRENT_DATE - INTERVAL '12 weeks'
-    AND flag = 2
-GROUP BY 1, 2
-ORDER BY 1 DESC;
-`;
-
-const query3 = `
-SELECT 
-    a.st_date AS week_start_date,
-    b.glcat_mcat_name AS mcat_name,
-    SUM(a.bl_sold) AS bl_sold_approved,
-    SUM(a.bl_approved) AS bl_approved,
-    SUM(a.trans) AS bl_txn_approved,
-    SUM(a.blni) AS blni
-FROM im_datamart_category.mcat_ads_campaign a
-LEFT JOIN im_dwh.dim_glcat_mcat b
-    ON a.mcat_id = b.glcat_mcat_id
-WHERE
-    a.flag = 2
-    AND a.time_period_flag = 'w'
-    AND a.st_date >= (SELECT MAX(st_date) FROM im_datamart_category.mcat_ads_campaign WHERE flag = 2 AND time_period_flag = 'w') - INTERVAL '12 weeks'
-GROUP BY 1, 2
-ORDER BY 1 DESC, 2;
-`;
-
 const query4 = `
 SELECT 
     a.iil_google_ads_lable_name AS flag,
@@ -150,9 +99,86 @@ WHERE g.fk_glcat_mcat_id IN (
 AND lower(a.iil_google_ads_lable_name) IN ('high', 'low', 'medium');
 `;
 
-export async function GET() {
+export async function GET(request: Request) {
   debugLog('GET request received');
   try {
+    const { searchParams } = new URL(request.url);
+    const period = searchParams.get('period') || 'weekly';
+
+    let flag = 'w';
+    let interval = '12 weeks';
+    let query1Date = `DATE_TRUNC('week', report_date + INTERVAL '1 day')::date - INTERVAL '1 day' AS week_start_date`;
+    let query1Interval = `12 weeks`;
+    let query2Date = `DATE_TRUNC('week', st_date) AS week_start_date`;
+    let query3Date = `a.st_date AS week_start_date`;
+
+    if (period === 'daily') {
+      flag = 'd';
+      interval = '30 days';
+      query1Date = `report_date::date AS week_start_date`;
+      query1Interval = `30 days`;
+      query2Date = `st_date::date AS week_start_date`;
+      query3Date = `a.st_date::date AS week_start_date`;
+    } else if (period === 'monthly') {
+      flag = 'm';
+      interval = '12 months';
+      query1Date = `DATE_TRUNC('month', report_date)::date AS week_start_date`;
+      query1Interval = `12 months`;
+      query2Date = `DATE_TRUNC('month', st_date)::date AS week_start_date`;
+      query3Date = `DATE_TRUNC('month', a.st_date)::date AS week_start_date`;
+    }
+
+    const query1 = `
+SELECT 
+    ${query1Date},
+    segments_product_type_l4 AS mcat_name,
+    SUM(total_clicks) AS total_clicks,
+    SUM(total_impressions) AS total_impressions,
+    SUM(total_cost_inr) AS total_cost_inr,
+    SUM(total_conversions) AS total_conversions
+FROM im_datamart_bigquery.fact_bigquery_product_ads
+WHERE report_date >= (SELECT MAX(report_date) FROM im_datamart_bigquery.fact_bigquery_product_ads) - INTERVAL '${query1Interval}'
+GROUP BY 1, 2
+ORDER BY 1 DESC, 2;
+    `;
+
+    const query2 = `
+SELECT
+    ${query2Date},
+    mcat_id AS eto_ofr_mcat_id,
+    SUM(bl_approved) AS bl_approved,
+    SUM(bl_sold) AS bl_sold_approved,
+    SUM(trans) AS bl_txn_approved,
+    SUM(blni) AS blni,
+    SUM(total_cost_inr) AS total_cost_inr
+FROM im_datamart_category.mcat_ads_campaign
+WHERE
+    time_period_flag = '${flag}'
+    AND st_date >= CURRENT_DATE - INTERVAL '${interval}'
+    AND flag = 2
+GROUP BY 1, 2
+ORDER BY 1 DESC;
+    `;
+
+    const query3 = `
+SELECT 
+    ${query3Date},
+    b.glcat_mcat_name AS mcat_name,
+    SUM(a.bl_sold) AS bl_sold_approved,
+    SUM(a.bl_approved) AS bl_approved,
+    SUM(a.trans) AS bl_txn_approved,
+    SUM(a.blni) AS blni
+FROM im_datamart_category.mcat_ads_campaign a
+LEFT JOIN im_dwh.dim_glcat_mcat b
+    ON a.mcat_id = b.glcat_mcat_id
+WHERE
+    a.flag = 2
+    AND a.time_period_flag = '${flag}'
+    AND a.st_date >= (SELECT MAX(st_date) FROM im_datamart_category.mcat_ads_campaign WHERE flag = 2 AND time_period_flag = '${flag}') - INTERVAL '${interval}'
+GROUP BY 1, 2
+ORDER BY 1 DESC, 2;
+    `;
+
     debugLog('Executing Redshift queries...');
     const t0 = Date.now();
     const [res1, res2, res3, res4] = await Promise.all([

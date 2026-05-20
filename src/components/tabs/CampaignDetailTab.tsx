@@ -397,7 +397,7 @@ export default function CampaignDetailTab() {
 
       const maxCostWeek = [...compareData].sort((a, b) => b.stats.cost - a.stats.cost)[0];
       if (maxCostWeek && maxCostWeek.stats.cost > 0) {
-         insights.push(`Budget Check: Highest spend occurred during the week of ${maxCostWeek.week} (₹${maxCostWeek.stats.cost.toLocaleString(undefined, {maximumFractionDigits:0})}). Check if conversions aligned with this spend.`);
+         insights.push(`Budget Check: Highest spend occurred during the week of ${maxCostWeek.week} (₹${maxCostWeek.stats.cost.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits:1})}). Check if conversions aligned with this spend.`);
       }
       return insights;
     }
@@ -414,7 +414,7 @@ export default function CampaignDetailTab() {
     insights.push(`Top Driver: ${topPerformer.name} is leading the selected group with the highest ${metricLabel}.`);
     
     if (topCost && topCost.cost > 0) {
-      insights.push(`Budget Focus: ${topCost.name} consumed the highest budget (₹${topCost.cost.toLocaleString(undefined, {maximumFractionDigits: 0})}) this week.`);
+      insights.push(`Budget Focus: ${topCost.name} consumed the highest budget (₹${topCost.cost.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}) this week.`);
     }
 
     if (rankingData.bottom10.length > 0) {
@@ -558,12 +558,12 @@ export default function CampaignDetailTab() {
             </div>
             <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
               <div>
-                <div className="bn-val" style={{ color: C.b }}>{bestKpis.impressions.val.toLocaleString()}</div>
+                <div className="bn-val" style={{ color: C.b }}>{bestKpis.impressions.val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Impressions</div>
                 <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.impressions.week)}</div>
               </div>
               <div>
-                <div className="bn-val" style={{ color: C.t }}>{bestKpis.clicks.val.toLocaleString()}</div>
+                <div className="bn-val" style={{ color: C.t }}>{bestKpis.clicks.val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Clicks</div>
                 <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.clicks.week)}</div>
               </div>
@@ -712,15 +712,15 @@ export default function CampaignDetailTab() {
               </div>
             </div>
             <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-              <div><div className="bn-val" style={{ color: C.b }}>{kpiStats.impressions.toLocaleString()}</div><div className="bn-lbl">Impressions</div></div>
-              <div><div className="bn-val" style={{ color: C.t }}>{kpiStats.clicks.toLocaleString()}</div><div className="bn-lbl">Clicks</div></div>
+              <div><div className="bn-val" style={{ color: C.b }}>{kpiStats.impressions.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Impressions</div></div>
+              <div><div className="bn-val" style={{ color: C.t }}>{kpiStats.clicks.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Clicks</div></div>
               <div><div className="bn-val" style={{ color: C.g }}>{kpiStats.ctr.toFixed(1)}%</div><div className="bn-lbl">CTR</div></div>
               <div><div className="bn-val" style={{ color: C.r }}>₹{kpiStats.cost.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Cost (INR)</div></div>
               <div><div className="bn-val" style={{ color: C.a }}>{kpiStats.conversions.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Conversions</div></div>
-              <div><div className="bn-val" style={{ color: C.p }}>{kpiStats.bl_approved.toLocaleString()}</div><div className="bn-lbl">BL Approved</div></div>
-              <div><div className="bn-val" style={{ color: '#66bb6a' }}>{kpiStats.bl_sold_approved.toLocaleString()}</div><div className="bn-lbl">BL Sold</div></div>
-              <div><div className="bn-val" style={{ color: C.d }}>{kpiStats.bl_txn_approved.toLocaleString()}</div><div className="bn-lbl">Txn Approved</div></div>
-              <div><div className="bn-val" style={{ color: '#ff8a65' }}>{kpiStats.blni.toLocaleString()}</div><div className="bn-lbl">BLNI</div></div>
+              <div><div className="bn-val" style={{ color: C.p }}>{kpiStats.bl_approved.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">BL Approved</div></div>
+              <div><div className="bn-val" style={{ color: '#66bb6a' }}>{kpiStats.bl_sold_approved.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">BL Sold</div></div>
+              <div><div className="bn-val" style={{ color: C.d }}>{kpiStats.bl_txn_approved.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Txn Approved</div></div>
+              <div><div className="bn-val" style={{ color: '#ff8a65' }}>{kpiStats.blni.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">BLNI</div></div>
               <div><div className="bn-val" style={{ color: '#29b6f6' }}>{kpiStats.txn_approved_pct.toFixed(1)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
               <div><div className="bn-val" style={{ color: '#ffca28' }}>{kpiStats.bl_sold_pct.toFixed(1)}%</div><div className="bn-lbl">BL Sold %</div></div>
               <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{kpiStats.cost_per_txn.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Cost / Txn</div></div>

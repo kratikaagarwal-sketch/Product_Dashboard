@@ -11,6 +11,7 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const navItems = [
     { id: 'overview', icon: '📊', label: 'Overview' },
+    { id: 'mcat_weekly', icon: '📅', label: 'Campaign Detail' },
     { id: 'google', icon: '📢', label: 'Google Ads' },
     { id: 'bl', icon: '💼', label: 'Business Leads' },
     { id: 'traffic_enquiry', icon: '🌐', label: 'Traffic & Enquiries' },
@@ -18,7 +19,6 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
 
   const intelligenceItems = [
     { id: 'mcat', icon: '⏸️', label: 'MCAT Pause' },
-    { id: 'mcat_weekly', icon: '📅', label: 'Campaign Analysis' },
     { id: 'hygiene', icon: '🧼', label: 'Feed Hygiene' },
     { id: 'diversity', icon: '🌈', label: 'Category Diversity' },
     { id: 'ai', icon: '✨', label: 'AI Insights' },

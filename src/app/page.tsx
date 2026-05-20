@@ -11,7 +11,7 @@ import CategoryDiversityTab from "@/components/tabs/CategoryDiversityTab";
 import AiInsightsTab from "@/components/tabs/AiInsightsTab";
 import BlTab from "@/components/tabs/BlTab";
 import TrafficEnquiryTab from "@/components/tabs/TrafficEnquiryTab";
-import McatWeeklyPerformanceTab from "@/components/tabs/McatWeeklyPerformanceTab";
+import CampaignDetailTab from "@/components/tabs/CampaignDetailTab";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -30,7 +30,7 @@ export default function Home() {
           {activeTab === "traffic_enquiry" && <TrafficEnquiryTab />}
           {activeTab === "hygiene" && <HygieneTab />}
           {activeTab === "mcat" && <McatPauseTab />}
-          {activeTab === "mcat_weekly" && <McatWeeklyPerformanceTab />}
+          {activeTab === "mcat_weekly" && <CampaignDetailTab />}
           {activeTab === "diversity" && <CategoryDiversityTab />}
           {activeTab === "ai" && <AiInsightsTab />}
           

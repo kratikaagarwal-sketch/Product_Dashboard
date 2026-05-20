@@ -19,7 +19,7 @@ const METRICS = [
   { key: 'pmcat_diversity_pct', label: 'PMCAT Diversity %' }
 ];
 
-export default function McatWeeklyPerformanceTab() {
+export default function CampaignDetailTab() {
   const [data, setData] = useState<any[]>([]);
   const [campaignData, setCampaignData] = useState<any[]>([]);
   const [adsRunningMcats, setAdsRunningMcats] = useState<string[]>([]);

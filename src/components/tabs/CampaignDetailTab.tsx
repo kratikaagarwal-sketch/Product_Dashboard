@@ -223,24 +223,43 @@ export default function CampaignDetailTab() {
 
   const bestKpis = useMemo(() => {
     if (compareData.length === 0) return null;
-    const best = { ...compareData[0].stats };
+    const best: any = {};
+    Object.keys(compareData[0].stats).forEach(k => {
+      best[k] = {
+        val: compareData[0].stats[k],
+        week: compareData[0].week
+      };
+    });
     compareData.forEach(d => {
-      Object.keys(best).forEach(k => {
+      Object.keys(d.stats).forEach(k => {
         if (k === 'cost' || k === 'cost_per_txn') {
-          // Lower is better (excluding zeroes if possible, but keeping logic simple for now)
-          if (d.stats[k] > 0 && (d.stats[k] < best[k] || best[k] === 0)) {
-            best[k] = d.stats[k];
+          // Lower is better (excluding zeroes)
+          if (d.stats[k] > 0 && (d.stats[k] < best[k].val || best[k].val === 0)) {
+            best[k] = { val: d.stats[k], week: d.week };
           }
         } else {
            // Higher is better
-          if (d.stats[k] > best[k]) {
-             best[k] = d.stats[k];
+          if (d.stats[k] > best[k].val) {
+             best[k] = { val: d.stats[k], week: d.week };
           }
         }
       });
     });
     return best;
   }, [compareData]);
+
+  const formatWeekLabel = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length < 2) return dateStr;
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const mIdx = parseInt(parts[1], 10) - 1;
+    if (timePeriod === 'monthly') {
+      return `${monthNames[mIdx]} ${parts[0]}`;
+    }
+    if (parts.length < 3) return dateStr;
+    return `${monthNames[mIdx]} ${parseInt(parts[2], 10)}`;
+  };
 
   const formatVal = (val: number, metric: string) => {
     if (metric === 'cost' || metric === 'cost_per_txn') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -536,15 +555,55 @@ export default function CampaignDetailTab() {
               </div>
             </div>
             <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-              <div><div className="bn-val" style={{ color: C.b }}>{bestKpis.impressions.toLocaleString()}</div><div className="bn-lbl">Impressions</div></div>
-              <div><div className="bn-val" style={{ color: C.t }}>{bestKpis.clicks.toLocaleString()}</div><div className="bn-lbl">Clicks</div></div>
-              <div><div className="bn-val" style={{ color: C.g }}>{bestKpis.ctr.toFixed(1)}%</div><div className="bn-lbl">CTR</div></div>
-              <div><div className="bn-val" style={{ color: C.r }}>₹{bestKpis.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost (Min)</div></div>
-              <div><div className="bn-val" style={{ color: C.a }}>{bestKpis.conversions.toLocaleString()}</div><div className="bn-lbl">Conversions</div></div>
-              <div><div className="bn-val" style={{ color: '#29b6f6' }}>{bestKpis.txn_approved_pct.toFixed(1)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
-              <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{bestKpis.cost_per_txn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost/Txn (Min)</div></div>
-              {granularity !== 'mcat' && <div><div className="bn-val" style={{ color: '#ab47bc' }}>{bestKpis.mcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">MCAT Div.</div></div>}
-              {granularity === 'group' && <div><div className="bn-val" style={{ color: '#ec407a' }}>{bestKpis.pmcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">PMCAT Div.</div></div>}
+              <div>
+                <div className="bn-val" style={{ color: C.b }}>{bestKpis.impressions.val.toLocaleString()}</div>
+                <div className="bn-lbl">Impressions</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.impressions.week)}</div>
+              </div>
+              <div>
+                <div className="bn-val" style={{ color: C.t }}>{bestKpis.clicks.val.toLocaleString()}</div>
+                <div className="bn-lbl">Clicks</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.clicks.week)}</div>
+              </div>
+              <div>
+                <div className="bn-val" style={{ color: C.g }}>{bestKpis.ctr.val.toFixed(1)}%</div>
+                <div className="bn-lbl">CTR</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.ctr.week)}</div>
+              </div>
+              <div>
+                <div className="bn-val" style={{ color: C.r }}>₹{bestKpis.cost.val.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                <div className="bn-lbl">Cost (Min)</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost.week)}</div>
+              </div>
+              <div>
+                <div className="bn-val" style={{ color: C.a }}>{bestKpis.conversions.val.toLocaleString()}</div>
+                <div className="bn-lbl">Conversions</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.conversions.week)}</div>
+              </div>
+              <div>
+                <div className="bn-val" style={{ color: '#29b6f6' }}>{bestKpis.txn_approved_pct.val.toFixed(1)}%</div>
+                <div className="bn-lbl">Txn (Appr) %</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.txn_approved_pct.week)}</div>
+              </div>
+              <div>
+                <div className="bn-val" style={{ color: '#ef5350' }}>₹{bestKpis.cost_per_txn.val.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                <div className="bn-lbl">Cost/Txn (Min)</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost_per_txn.week)}</div>
+              </div>
+              {granularity !== 'mcat' && (
+                <div>
+                  <div className="bn-val" style={{ color: '#ab47bc' }}>{bestKpis.mcat_diversity_pct.val.toFixed(1)}%</div>
+                  <div className="bn-lbl">MCAT Div.</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.mcat_diversity_pct.week)}</div>
+                </div>
+              )}
+              {granularity === 'group' && (
+                <div>
+                  <div className="bn-val" style={{ color: '#ec407a' }}>{bestKpis.pmcat_diversity_pct.val.toFixed(1)}%</div>
+                  <div className="bn-lbl">PMCAT Div.</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.pmcat_diversity_pct.week)}</div>
+                </div>
+              )}
             </div>
           </div>
 

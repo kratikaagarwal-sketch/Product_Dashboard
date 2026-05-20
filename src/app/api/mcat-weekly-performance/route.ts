@@ -167,7 +167,8 @@ SELECT
     SUM(a.bl_sold) AS bl_sold_approved,
     SUM(a.bl_approved) AS bl_approved,
     SUM(a.trans) AS bl_txn_approved,
-    SUM(a.blni) AS blni
+    SUM(a.blni) AS blni,
+    SUM(a.total_cost_inr) AS total_cost_inr
 FROM im_datamart_category.mcat_ads_campaign a
 LEFT JOIN im_dwh.dim_glcat_mcat b
     ON a.mcat_id = b.glcat_mcat_id
@@ -210,7 +211,7 @@ ORDER BY 1 DESC, 2;
         mcat: mcatName,
         clicks,
         impressions,
-        cost,
+        cost, // fallback to raw ads cost
         conversions,
         ctr,
         bl_sold_approved: 0,
@@ -232,6 +233,7 @@ ORDER BY 1 DESC, 2;
       const bl_approved = parseInt(row.bl_approved, 10) || 0;
       const bl_txn_approved = parseInt(row.bl_txn_approved, 10) || 0;
       const blni = parseInt(row.blni, 10) || 0;
+      const cost = parseFloat(row.total_cost_inr) || 0;
 
       if (mergedMap.has(key)) {
         const existing = mergedMap.get(key);
@@ -239,13 +241,14 @@ ORDER BY 1 DESC, 2;
         existing.bl_approved = bl_approved;
         existing.bl_txn_approved = bl_txn_approved;
         existing.blni = blni;
+        existing.cost = cost; // Overwrite with campaign table cost
       } else {
         mergedMap.set(key, {
           week_start_date: weekStr,
           mcat: mcatName,
           clicks: 0,
           impressions: 0,
-          cost: 0,
+          cost, // Set campaign cost
           conversions: 0,
           ctr: 0,
           bl_sold_approved,

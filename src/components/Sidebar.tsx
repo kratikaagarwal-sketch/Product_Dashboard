@@ -17,7 +17,6 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   ];
 
   const intelligenceItems = [
-    { id: 'campaign', icon: '📂', label: 'Campaign Detail' },
     { id: 'mcat', icon: '⏸️', label: 'MCAT Pause' },
     { id: 'mcat_weekly', icon: '📅', label: 'Campaign Analysis' },
     { id: 'hygiene', icon: '🧼', label: 'Feed Hygiene' },

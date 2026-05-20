@@ -452,7 +452,7 @@ export default function McatWeeklyPerformanceTab() {
           <div>
             <label>View Mode</label>
             <select value={isCompareMode ? 'compare' : 'standard'} onChange={(e) => setIsCompareMode(e.target.value === 'compare')} style={{ fontWeight: isCompareMode ? 'bold' : 'normal', color: isCompareMode ? '#ab47bc' : 'inherit' }}>
-              <option value="standard">Standard Week</option>
+              <option value="standard">Standard View</option>
               <option value="compare">Compare Mode 📊</option>
             </select>
           </div>
@@ -814,40 +814,7 @@ export default function McatWeeklyPerformanceTab() {
             </div>
           </div>
 
-          <div className="sh" style={{ marginTop: '30px' }}>
-            <h2>Campaign Conversions (by MCAT ID) <span>From mcat_ads_campaign</span></h2>
-          </div>
-          <div className="tw cc">
-            <table className="dt">
-              <thead>
-                <tr>
-                  <th>MCAT ID</th>
-                  <th className="num">BL Approved</th>
-                  <th className="num">BL Sold</th>
-                  <th className="num">Txn</th>
-                  <th className="num">BLNI</th>
-                  <th className="num">Cost (INR)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaignData
-                  .filter(d => d.week_start_date === selectedWeek)
-                  .sort((a,b) => b.bl_approved - a.bl_approved)
-                  .slice(0, 50)
-                  .map((item, idx) => (
-                  <tr key={item.mcat_id + idx}>
-                    <td style={{ fontWeight: 500 }}>{item.mcat_id}</td>
-                    <td className="num">{item.bl_approved.toLocaleString()}</td>
-                    <td className="num">{item.bl_sold_approved.toLocaleString()}</td>
-                    <td className="num">{item.bl_txn_approved.toLocaleString()}</td>
-                    <td className="num">{item.blni.toLocaleString()}</td>
-                    <td className="num">₹{item.total_cost_inr.toLocaleString(undefined, {maximumFractionDigits:0})}</td>
-                  </tr>
-                ))}
-                {campaignData.filter(d => d.week_start_date === selectedWeek).length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center' }}>No data</td></tr>}
-              </tbody>
-            </table>
-          </div>
+
         </>
       )}
     </div>

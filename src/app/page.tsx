@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import OverviewTab from "@/components/tabs/OverviewTab";
-import CampaignDetailTab from "@/components/tabs/CampaignDetailTab";
 import GoogleAdsTab from "@/components/tabs/GoogleAdsTab";
 import HygieneTab from "@/components/tabs/HygieneTab";
 import McatPauseTab from "@/components/tabs/McatPauseTab";
@@ -29,7 +28,6 @@ export default function Home() {
           {activeTab === "google" && <GoogleAdsTab />}
           {activeTab === "bl" && <BlTab />}
           {activeTab === "traffic_enquiry" && <TrafficEnquiryTab />}
-          {activeTab === "campaign" && <CampaignDetailTab />}
           {activeTab === "hygiene" && <HygieneTab />}
           {activeTab === "mcat" && <McatPauseTab />}
           {activeTab === "mcat_weekly" && <McatWeeklyPerformanceTab />}
@@ -37,7 +35,7 @@ export default function Home() {
           {activeTab === "ai" && <AiInsightsTab />}
           
           {/* Default view for unimplemented tabs */}
-          {!["overview", "google", "bl", "traffic_enquiry", "campaign", "hygiene", "mcat", "mcat_weekly", "diversity", "ai"].includes(activeTab) && (
+          {!["overview", "google", "bl", "traffic_enquiry", "hygiene", "mcat", "mcat_weekly", "diversity", "ai"].includes(activeTab) && (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted)' }}>
               <div style={{ fontSize: '30px', marginBottom: '10px' }}>🚧</div>
               <h3>Module under construction</h3>

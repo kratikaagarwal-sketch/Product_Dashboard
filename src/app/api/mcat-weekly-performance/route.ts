@@ -112,6 +112,20 @@ export async function GET(request: Request) {
     let query2Date = `st_date::date AS week_start_date`;
     let query3Date = `a.st_date::date AS week_start_date`;
 
+    let query2Where = `
+    time_period_flag = 'w'
+    AND st_date >= DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '85 day'
+    AND st_date <  DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day'
+    AND flag = 2
+    `;
+
+    let query3Where = `
+    a.time_period_flag = 'w'
+    AND a.st_date >= DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '85 day'
+    AND a.st_date <  DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day'
+    AND a.flag = 2
+    `;
+
     if (period === 'daily') {
       flag = 'd';
       interval = '30 days';
@@ -119,6 +133,16 @@ export async function GET(request: Request) {
       query1Interval = `30 days`;
       query2Date = `st_date::date AS week_start_date`;
       query3Date = `a.st_date::date AS week_start_date`;
+      query2Where = `
+      time_period_flag = 'd'
+      AND st_date >= CURRENT_DATE - INTERVAL '30 days'
+      AND flag = 2
+      `;
+      query3Where = `
+      a.time_period_flag = 'd'
+      AND a.st_date >= (SELECT MAX(st_date) FROM im_datamart_category.mcat_ads_campaign WHERE flag = 2 AND time_period_flag = 'd') - INTERVAL '30 days'
+      AND a.flag = 2
+      `;
     } else if (period === 'monthly') {
       flag = 'm';
       interval = '365 days';
@@ -126,6 +150,16 @@ export async function GET(request: Request) {
       query1Interval = `365 days`;
       query2Date = `DATE_TRUNC('month', st_date)::date AS week_start_date`;
       query3Date = `DATE_TRUNC('month', a.st_date)::date AS week_start_date`;
+      query2Where = `
+      time_period_flag = 'm'
+      AND st_date >= CURRENT_DATE - INTERVAL '365 days'
+      AND flag = 2
+      `;
+      query3Where = `
+      a.time_period_flag = 'm'
+      AND a.st_date >= (SELECT MAX(st_date) FROM im_datamart_category.mcat_ads_campaign WHERE flag = 2 AND time_period_flag = 'm') - INTERVAL '365 days'
+      AND a.flag = 2
+      `;
     }
 
     const query1 = `
@@ -153,9 +187,7 @@ SELECT
     SUM(total_cost_inr) AS total_cost_inr
 FROM im_datamart_category.mcat_ads_campaign
 WHERE
-    time_period_flag = '${flag}'
-    AND st_date >= CURRENT_DATE - INTERVAL '${interval}'
-    AND flag = 2
+    ${query2Where}
 GROUP BY 1, 2
 ORDER BY 1 DESC;
     `;
@@ -173,9 +205,7 @@ FROM im_datamart_category.mcat_ads_campaign a
 LEFT JOIN im_dwh.dim_glcat_mcat b
     ON a.mcat_id = b.glcat_mcat_id
 WHERE
-    a.flag = 2
-    AND a.time_period_flag = '${flag}'
-    AND a.st_date >= (SELECT MAX(st_date) FROM im_datamart_category.mcat_ads_campaign WHERE flag = 2 AND time_period_flag = '${flag}') - INTERVAL '${interval}'
+    ${query3Where}
 GROUP BY 1, 2
 ORDER BY 1 DESC, 2;
     `;

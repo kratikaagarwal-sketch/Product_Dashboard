@@ -28,6 +28,7 @@ export default function CampaignDetailTab() {
   const [error, setError] = useState<string | null>(null);
 
   // Filters
+  const [timePeriod, setTimePeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [selectedWeek, setSelectedWeek] = useState<string>('');
   const [granularity, setGranularity] = useState<'group' | 'pmcat' | 'mcat'>('mcat');
   
@@ -439,6 +440,14 @@ export default function CampaignDetailTab() {
       <div className="camp-filter-bar" style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
           <div>
+            <label>Time Period</label>
+            <select value={timePeriod} onChange={(e) => setTimePeriod(e.target.value as any)} style={{ background: 'var(--bg2)', border: '1px solid var(--teal)', color: 'var(--teal)' }}>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div>
             <label>Granularity View</label>
             <select value={granularity} onChange={(e) => {
               setGranularity(e.target.value as any);
@@ -457,20 +466,24 @@ export default function CampaignDetailTab() {
             </select>
           </div>
 
-          {!isCompareMode ? (
-            <div>
-              <label>Week Starting</label>
-              <select value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)}>
-                {weeks.map(w => <option key={w} value={w}>{w}</option>)}
-              </select>
-            </div>
-          ) : (
-            <div>
-              <label>Compare Last (N) Weeks</label>
-              <select value={compareWeeksCount} onChange={(e) => setCompareWeeksCount(Number(e.target.value))}>
-                {[2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>{n} Weeks</option>)}
-              </select>
-            </div>
+          {timePeriod === 'weekly' && (
+            <>
+              {!isCompareMode ? (
+                <div>
+                  <label>Week Starting</label>
+                  <select value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)}>
+                    {weeks.map(w => <option key={w} value={w}>{w}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label>Compare Last (N) Weeks</label>
+                  <select value={compareWeeksCount} onChange={(e) => setCompareWeeksCount(Number(e.target.value))}>
+                    {[2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>{n} Weeks</option>)}
+                  </select>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -506,7 +519,13 @@ export default function CampaignDetailTab() {
         </div>
       </div>
 
-      {isCompareMode && bestKpis ? (
+      {timePeriod !== 'weekly' ? (
+        <div className="cc" style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--muted)' }}>
+          <div style={{ fontSize: '30px', marginBottom: '15px' }}>📅</div>
+          <h3>No Data Available</h3>
+          <p>The {timePeriod} data view is currently empty. Please select the "Weekly" time period to view campaign details.</p>
+        </div>
+      ) : isCompareMode && bestKpis ? (
         <div className="compare-view">
           {/* Best KPIs Banner */}
           <div className="banner" style={{ marginBottom: '18px', background: 'linear-gradient(90deg, #1e1e24, #121216)', borderLeft: '4px solid #ab47bc' }}>

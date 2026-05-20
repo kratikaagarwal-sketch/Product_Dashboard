@@ -262,7 +262,9 @@ export default function CampaignDetailTab() {
   };
 
   const formatVal = (val: number, metric: string) => {
-    if (metric === 'cost' || metric === 'cost_per_txn') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    if (metric === 'cost') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    if (metric === 'cost_per_txn') return `₹${val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+    if (metric === 'conversions') return val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'mcat_diversity_pct' || metric === 'pmcat_diversity_pct') return `${val.toFixed(1)}%`;
     return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
   };
@@ -571,12 +573,12 @@ export default function CampaignDetailTab() {
                 <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.ctr.week)}</div>
               </div>
               <div>
-                <div className="bn-val" style={{ color: C.r }}>₹{bestKpis.cost.val.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                <div className="bn-val" style={{ color: C.r }}>₹{bestKpis.cost.val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Cost (Min)</div>
                 <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost.week)}</div>
               </div>
               <div>
-                <div className="bn-val" style={{ color: C.a }}>{bestKpis.conversions.val.toLocaleString()}</div>
+                <div className="bn-val" style={{ color: C.a }}>{bestKpis.conversions.val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Conversions</div>
                 <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.conversions.week)}</div>
               </div>
@@ -586,7 +588,7 @@ export default function CampaignDetailTab() {
                 <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.txn_approved_pct.week)}</div>
               </div>
               <div>
-                <div className="bn-val" style={{ color: '#ef5350' }}>₹{bestKpis.cost_per_txn.val.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                <div className="bn-val" style={{ color: '#ef5350' }}>₹{bestKpis.cost_per_txn.val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Cost/Txn (Min)</div>
                 <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost_per_txn.week)}</div>
               </div>
@@ -713,15 +715,15 @@ export default function CampaignDetailTab() {
               <div><div className="bn-val" style={{ color: C.b }}>{kpiStats.impressions.toLocaleString()}</div><div className="bn-lbl">Impressions</div></div>
               <div><div className="bn-val" style={{ color: C.t }}>{kpiStats.clicks.toLocaleString()}</div><div className="bn-lbl">Clicks</div></div>
               <div><div className="bn-val" style={{ color: C.g }}>{kpiStats.ctr.toFixed(1)}%</div><div className="bn-lbl">CTR</div></div>
-              <div><div className="bn-val" style={{ color: C.r }}>₹{kpiStats.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost (INR)</div></div>
-              <div><div className="bn-val" style={{ color: C.a }}>{kpiStats.conversions.toLocaleString()}</div><div className="bn-lbl">Conversions</div></div>
+              <div><div className="bn-val" style={{ color: C.r }}>₹{kpiStats.cost.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Cost (INR)</div></div>
+              <div><div className="bn-val" style={{ color: C.a }}>{kpiStats.conversions.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Conversions</div></div>
               <div><div className="bn-val" style={{ color: C.p }}>{kpiStats.bl_approved.toLocaleString()}</div><div className="bn-lbl">BL Approved</div></div>
               <div><div className="bn-val" style={{ color: '#66bb6a' }}>{kpiStats.bl_sold_approved.toLocaleString()}</div><div className="bn-lbl">BL Sold</div></div>
               <div><div className="bn-val" style={{ color: C.d }}>{kpiStats.bl_txn_approved.toLocaleString()}</div><div className="bn-lbl">Txn Approved</div></div>
               <div><div className="bn-val" style={{ color: '#ff8a65' }}>{kpiStats.blni.toLocaleString()}</div><div className="bn-lbl">BLNI</div></div>
               <div><div className="bn-val" style={{ color: '#29b6f6' }}>{kpiStats.txn_approved_pct.toFixed(1)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
               <div><div className="bn-val" style={{ color: '#ffca28' }}>{kpiStats.bl_sold_pct.toFixed(1)}%</div><div className="bn-lbl">BL Sold %</div></div>
-              <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{kpiStats.cost_per_txn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost / Txn</div></div>
+              <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{kpiStats.cost_per_txn.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div><div className="bn-lbl">Cost / Txn</div></div>
               {granularity !== 'mcat' && <div><div className="bn-val" style={{ color: '#ab47bc' }}>{kpiStats.mcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">MCAT Diversity</div></div>}
               {granularity === 'group' && <div><div className="bn-val" style={{ color: '#ec407a' }}>{kpiStats.pmcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">PMCAT Diversity</div></div>}
             </div>

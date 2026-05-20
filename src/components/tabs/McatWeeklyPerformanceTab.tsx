@@ -15,7 +15,8 @@ const METRICS = [
   { key: 'txn_approved_pct', label: 'Txn (Approved) %' },
   { key: 'bl_sold_pct', label: 'BL Sold %' },
   { key: 'cost_per_txn', label: 'Cost / Txn' },
-  { key: 'mcat_diversity_pct', label: 'Diversity %' }
+  { key: 'mcat_diversity_pct', label: 'MCAT Diversity %' },
+  { key: 'pmcat_diversity_pct', label: 'PMCAT Diversity %' }
 ];
 
 export default function McatWeeklyPerformanceTab() {
@@ -36,6 +37,23 @@ export default function McatWeeklyPerformanceTab() {
   const [selectedMcat, setSelectedMcat] = useState<string>('all');
 
   const [rankMetric, setRankMetric] = useState<string>('ctr');
+
+  // Ensure rankMetric is valid for current granularity
+  useEffect(() => {
+    if (granularity === 'mcat' && (rankMetric === 'mcat_diversity_pct' || rankMetric === 'pmcat_diversity_pct')) {
+      setRankMetric('ctr');
+    } else if (granularity === 'pmcat' && rankMetric === 'pmcat_diversity_pct') {
+      setRankMetric('ctr');
+    }
+  }, [granularity, rankMetric]);
+
+  const activeMetrics = useMemo(() => {
+    return METRICS.filter(m => {
+      if (granularity === 'mcat' && (m.key === 'mcat_diversity_pct' || m.key === 'pmcat_diversity_pct')) return false;
+      if (granularity === 'pmcat' && m.key === 'pmcat_diversity_pct') return false;
+      return true;
+    });
+  }, [granularity]);
 
   useEffect(() => {
     // Fetch both Redshift data and Hierarchy JSON
@@ -79,6 +97,23 @@ export default function McatWeeklyPerformanceTab() {
   }, [data, hierarchy]);
 
   const adsRunningSet = useMemo(() => new Set(adsRunningMcats.map(m => m.toLowerCase())), [adsRunningMcats]);
+  
+  const adsRunningPmcatsSet = useMemo(() => {
+    const set = new Set<string>();
+    adsRunningMcats.forEach(m => {
+      const h = hierarchy[m.toLowerCase()];
+      if (h && h.pmcat) set.add(h.pmcat);
+    });
+    return set;
+  }, [adsRunningMcats, hierarchy]);
+
+  const pmcatToGroup = useMemo(() => {
+    const map = new Map<string, string>();
+    Object.values(hierarchy).forEach(h => {
+      if (h.pmcat && h.group) map.set(h.pmcat, h.group);
+    });
+    return map;
+  }, [hierarchy]);
 
   const weeks = useMemo(() => Array.from(new Set(data.map(d => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a)) as string[], [data]);
 
@@ -108,9 +143,26 @@ export default function McatWeeklyPerformanceTab() {
     if (granularity !== 'group' && selectedPmcat !== 'all') filtered = filtered.filter(d => d.pmcat === selectedPmcat);
     if (granularity === 'mcat' && selectedMcat !== 'all') filtered = filtered.filter(d => d.mcat === selectedMcat);
 
-    const totals = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0, mcat_diversity_pct: 0 };
+    const totals = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0, mcat_diversity_pct: 0, pmcat_diversity_pct: 0 };
     
-    const numeratorMcats = new Set();
+    let mcatDenominator = 0;
+    let pmcatDenominator = 0;
+
+    if (granularity === 'group') {
+      mcatDenominator = adsRunningMcats.filter(m => selectedGroup === 'all' || hierarchy[m.toLowerCase()]?.group === selectedGroup).length;
+      pmcatDenominator = Array.from(adsRunningPmcatsSet).filter(p => selectedGroup === 'all' || pmcatToGroup.get(p) === selectedGroup).length;
+    } else if (granularity === 'pmcat') {
+      mcatDenominator = adsRunningMcats.filter(m => {
+        const h = hierarchy[m.toLowerCase()];
+        const matchGroup = selectedGroup === 'all' || h?.group === selectedGroup;
+        const matchPmcat = selectedPmcat === 'all' || h?.pmcat === selectedPmcat;
+        return matchGroup && matchPmcat;
+      }).length;
+    }
+
+    const numeratorMcats = new Set<string>();
+    const pmcatBlTotals = new Map<string, number>();
+
     filtered.forEach(d => {
       totals.clicks += d.clicks || 0;
       totals.impressions += d.impressions || 0;
@@ -124,19 +176,25 @@ export default function McatWeeklyPerformanceTab() {
       if (d.bl_approved >= 10 && adsRunningSet.has(d.mcat.toLowerCase())) {
         numeratorMcats.add(d.mcat);
       }
+
+      if (granularity === 'group' && adsRunningPmcatsSet.has(d.pmcat)) {
+        pmcatBlTotals.set(d.pmcat, (pmcatBlTotals.get(d.pmcat) || 0) + (d.bl_approved || 0));
+      }
     });
 
-    let denominatorList = adsRunningMcats;
-    if (selectedGroup !== 'all') denominatorList = denominatorList.filter(m => hierarchy[m.toLowerCase()]?.group === selectedGroup);
-    if (granularity !== 'group' && selectedPmcat !== 'all') denominatorList = denominatorList.filter(m => hierarchy[m.toLowerCase()]?.pmcat === selectedPmcat);
-    
+    let pmcatNumerator = 0;
+    pmcatBlTotals.forEach(bl => {
+      if (bl >= 10) pmcatNumerator++;
+    });
+
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
     totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
     totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
     totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
-    totals.mcat_diversity_pct = denominatorList.length > 0 ? (numeratorMcats.size / denominatorList.length) * 100 : 0;
+    totals.mcat_diversity_pct = mcatDenominator > 0 ? (numeratorMcats.size / mcatDenominator) * 100 : 0;
+    totals.pmcat_diversity_pct = pmcatDenominator > 0 ? (pmcatNumerator / pmcatDenominator) * 100 : 0;
     return totals;
-  }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, selectedMcat, adsRunningMcats, adsRunningSet, hierarchy]);
+  }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, selectedMcat, adsRunningMcats, adsRunningSet, adsRunningPmcatsSet, pmcatToGroup, hierarchy]);
 
   // Roll up data by Granularity for the Ranking Analysis
   const rankingData = useMemo(() => {
@@ -148,15 +206,24 @@ export default function McatWeeklyPerformanceTab() {
     if (granularity === 'mcat' && selectedPmcat !== 'all') weeklyData = weeklyData.filter(d => d.pmcat === selectedPmcat);
 
     // Pre-calculate denominator per group/pmcat
-    const denomMap = new Map<string, number>();
-    adsRunningMcats.forEach(m => {
-      const h = hierarchy[m.toLowerCase()];
-      if (!h && granularity !== 'mcat') return;
-      let key = m;
-      if (granularity === 'pmcat') key = h?.pmcat || 'Unknown';
-      if (granularity === 'group') key = h?.group || 'Unknown';
-      denomMap.set(key, (denomMap.get(key) || 0) + 1);
-    });
+    const denomMapMcat = new Map<string, number>();
+    const denomMapPmcat = new Map<string, number>();
+    
+    if (granularity === 'group') {
+      adsRunningMcats.forEach(m => {
+        const h = hierarchy[m.toLowerCase()];
+        if (h && h.group) denomMapMcat.set(h.group, (denomMapMcat.get(h.group) || 0) + 1);
+      });
+      adsRunningPmcatsSet.forEach(p => {
+        const g = pmcatToGroup.get(p);
+        if (g) denomMapPmcat.set(g, (denomMapPmcat.get(g) || 0) + 1);
+      });
+    } else if (granularity === 'pmcat') {
+      adsRunningMcats.forEach(m => {
+        const h = hierarchy[m.toLowerCase()];
+        if (h && h.pmcat) denomMapMcat.set(h.pmcat, (denomMapMcat.get(h.pmcat) || 0) + 1);
+      });
+    }
 
     // Roll up logic
     const rolledUp = new Map<string, any>();
@@ -167,7 +234,7 @@ export default function McatWeeklyPerformanceTab() {
       if (granularity === 'group') key = d.group;
 
       if (!rolledUp.has(key)) {
-        rolledUp.set(key, { name: key, clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, numeratorSet: new Set() });
+        rolledUp.set(key, { name: key, clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, numeratorSet: new Set(), pmcatBlTotals: new Map<string, number>() });
       }
       const existing = rolledUp.get(key);
       existing.clicks += d.clicks || 0;
@@ -182,17 +249,29 @@ export default function McatWeeklyPerformanceTab() {
       if (d.bl_approved >= 10 && adsRunningSet.has(d.mcat.toLowerCase())) {
         existing.numeratorSet.add(d.mcat);
       }
+
+      if (granularity === 'group' && adsRunningPmcatsSet.has(d.pmcat)) {
+        existing.pmcatBlTotals.set(d.pmcat, (existing.pmcatBlTotals.get(d.pmcat) || 0) + (d.bl_approved || 0));
+      }
     });
 
     const rolledUpArr = Array.from(rolledUp.values()).map(d => {
-      const denom = denomMap.get(d.name) || 0;
+      const denomMcat = denomMapMcat.get(d.name) || 0;
+      const denomPmcat = denomMapPmcat.get(d.name) || 0;
+
+      let pmcatNum = 0;
+      d.pmcatBlTotals.forEach((bl: number) => {
+        if (bl >= 10) pmcatNum++;
+      });
+
       return {
         ...d,
         ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
         txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
         bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
         cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
-        mcat_diversity_pct: denom > 0 ? (d.numeratorSet.size / denom) * 100 : 0
+        mcat_diversity_pct: denomMcat > 0 ? (d.numeratorSet.size / denomMcat) * 100 : 0,
+        pmcat_diversity_pct: denomPmcat > 0 ? (pmcatNum / denomPmcat) * 100 : 0
       };
     });
 
@@ -206,7 +285,7 @@ export default function McatWeeklyPerformanceTab() {
       top10: sorted.slice(0, 10),
       bottom10: bottomSorted.slice(0, 10)
     };
-  }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, rankMetric, adsRunningMcats, adsRunningSet, hierarchy]);
+  }, [enrichedData, selectedWeek, granularity, selectedGroup, selectedPmcat, rankMetric, adsRunningMcats, adsRunningSet, adsRunningPmcatsSet, pmcatToGroup, hierarchy]);
 
   // AI Insights Generation
   const aiInsights = useMemo(() => {
@@ -241,7 +320,7 @@ export default function McatWeeklyPerformanceTab() {
 
   const formatVal = (val: number, metric: string) => {
     if (metric === 'cost' || metric === 'cost_per_txn') return `₹${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'mcat_diversity_pct') return `${val.toFixed(1)}%`;
+    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'mcat_diversity_pct' || metric === 'pmcat_diversity_pct') return `${val.toFixed(1)}%`;
     return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
   };
 
@@ -360,7 +439,8 @@ export default function McatWeeklyPerformanceTab() {
           <div><div className="bn-val" style={{ color: '#29b6f6' }}>{kpiStats.txn_approved_pct.toFixed(1)}%</div><div className="bn-lbl">Txn (Appr) %</div></div>
           <div><div className="bn-val" style={{ color: '#ffca28' }}>{kpiStats.bl_sold_pct.toFixed(1)}%</div><div className="bn-lbl">BL Sold %</div></div>
           <div><div className="bn-val" style={{ color: '#ef5350' }}>₹{kpiStats.cost_per_txn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div><div className="bn-lbl">Cost / Txn</div></div>
-          <div><div className="bn-val" style={{ color: '#ab47bc' }}>{kpiStats.mcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">Diversity %</div></div>
+          {granularity !== 'mcat' && <div><div className="bn-val" style={{ color: '#ab47bc' }}>{kpiStats.mcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">MCAT Diversity</div></div>}
+          {granularity === 'group' && <div><div className="bn-val" style={{ color: '#ec407a' }}>{kpiStats.pmcat_diversity_pct.toFixed(1)}%</div><div className="bn-lbl">PMCAT Diversity</div></div>}
         </div>
       </div>
 
@@ -386,7 +466,7 @@ export default function McatWeeklyPerformanceTab() {
 
       {/* Metric Selector for Rankings */}
       <div className="ai-tabs" style={{ marginBottom: '20px' }}>
-        {METRICS.map(m => (
+        {activeMetrics.map(m => (
           <button 
             key={m.key} 
             className={`ai-tab ${rankMetric === m.key ? 'on' : ''}`} 

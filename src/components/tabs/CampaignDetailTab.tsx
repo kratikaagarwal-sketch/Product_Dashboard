@@ -221,6 +221,136 @@ export default function CampaignDetailTab() {
     });
   }, [compareWeeksList, baseFilteredData, denominators, adsRunningSet, adsRunningPmcatsSet, granularity]);
 
+  const groupPerformanceData = useMemo(() => {
+    if (timePeriod !== 'weekly' || isCompareMode) return null;
+
+    const weeklyData = enrichedData.filter(d => d.week_start_date === selectedWeek);
+    const rolledUp = new Map<string, any>();
+    const denomMapMcat = new Map<string, number>();
+    const denomMapPmcat = new Map<string, number>();
+    
+    adsRunningMcats.forEach(m => {
+      const h = hierarchy[m.toLowerCase()];
+      if (h && h.group) denomMapMcat.set(h.group, (denomMapMcat.get(h.group) || 0) + 1);
+    });
+    adsRunningPmcatsSet.forEach(p => {
+      const g = pmcatToGroup.get(p);
+      if (g) denomMapPmcat.set(g, (denomMapPmcat.get(g) || 0) + 1);
+    });
+
+    weeklyData.forEach(d => {
+      const key = d.group || 'Unknown';
+      if (!rolledUp.has(key)) {
+        rolledUp.set(key, { 
+          name: key, 
+          clicks: 0, 
+          impressions: 0, 
+          cost: 0, 
+          conversions: 0, 
+          bl_sold_approved: 0, 
+          bl_approved: 0, 
+          bl_txn_approved: 0, 
+          blni: 0, 
+          numeratorSet: new Set(), 
+          pmcatBlTotals: new Map<string, number>() 
+        });
+      }
+      const existing = rolledUp.get(key);
+      existing.clicks += d.clicks || 0;
+      existing.impressions += d.impressions || 0;
+      existing.cost += d.cost || 0;
+      existing.conversions += d.conversions || 0;
+      existing.bl_sold_approved += d.bl_sold_approved || 0;
+      existing.bl_approved += d.bl_approved || 0;
+      existing.bl_txn_approved += d.bl_txn_approved || 0;
+      existing.blni += d.blni || 0;
+      
+      if (d.bl_approved >= 10 && adsRunningSet.has(d.mcat.toLowerCase())) {
+        existing.numeratorSet.add(d.mcat);
+      }
+
+      if (adsRunningPmcatsSet.has(d.pmcat)) {
+        existing.pmcatBlTotals.set(d.pmcat, (existing.pmcatBlTotals.get(d.pmcat) || 0) + (d.bl_approved || 0));
+      }
+    });
+
+    const rows = Array.from(rolledUp.values()).map(d => {
+      const denomMcat = denomMapMcat.get(d.name) || 0;
+      const denomPmcat = denomMapPmcat.get(d.name) || 0;
+
+      let pmcatNum = 0;
+      d.pmcatBlTotals.forEach((bl: number) => {
+        if (bl >= 10) pmcatNum++;
+      });
+
+      return {
+        ...d,
+        ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+        txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
+        bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
+        cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+        mcat_diversity_pct: denomMcat > 0 ? (d.numeratorSet.size / denomMcat) * 100 : 0,
+        pmcat_diversity_pct: denomPmcat > 0 ? (pmcatNum / denomPmcat) * 100 : 0
+      };
+    });
+
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+
+    const totals = {
+      name: 'Total',
+      clicks: 0,
+      impressions: 0,
+      cost: 0,
+      conversions: 0,
+      bl_sold_approved: 0,
+      bl_approved: 0,
+      bl_txn_approved: 0,
+      blni: 0,
+      denomMcat: 0,
+      denomPmcat: 0,
+      ctr: 0,
+      txn_approved_pct: 0,
+      bl_sold_pct: 0,
+      cost_per_txn: 0,
+      mcat_diversity_pct: 0,
+      pmcat_diversity_pct: 0
+    };
+
+    let totalNumeratorMcatsSize = 0;
+    let totalPmcatNum = 0;
+
+    rows.forEach(r => {
+      totals.clicks += r.clicks;
+      totals.impressions += r.impressions;
+      totals.cost += r.cost;
+      totals.conversions += r.conversions;
+      totals.bl_sold_approved += r.bl_sold_approved;
+      totals.bl_approved += r.bl_approved;
+      totals.bl_txn_approved += r.bl_txn_approved;
+      totals.blni += r.blni;
+      
+      totalNumeratorMcatsSize += r.numeratorSet.size;
+      
+      let pmcatNum = 0;
+      r.pmcatBlTotals.forEach((bl: number) => {
+        if (bl >= 10) pmcatNum++;
+      });
+      totalPmcatNum += pmcatNum;
+
+      totals.denomMcat += denomMapMcat.get(r.name) || 0;
+      totals.denomPmcat += denomMapPmcat.get(r.name) || 0;
+    });
+
+    totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
+    totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
+    totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
+    totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
+    totals.mcat_diversity_pct = totals.denomMcat > 0 ? (totalNumeratorMcatsSize / totals.denomMcat) * 100 : 0;
+    totals.pmcat_diversity_pct = totals.denomPmcat > 0 ? (totalPmcatNum / totals.denomPmcat) * 100 : 0;
+
+    return { rows, totals };
+  }, [enrichedData, selectedWeek, timePeriod, isCompareMode, adsRunningMcats, adsRunningSet, adsRunningPmcatsSet, pmcatToGroup, hierarchy]);
+
   const bestKpis = useMemo(() => {
     if (compareData.length === 0) return null;
     const best: any = {};
@@ -893,6 +1023,74 @@ export default function CampaignDetailTab() {
             </div>
           </div>
 
+          {/* Group-wise Summary Table */}
+          {groupPerformanceData && (
+            <div className="cc" style={{ margin: '30px 0 0 0' }}>
+              <div className="ct">📋 Group Performance Summary</div>
+              <div className="cs">Weekly KPI metrics rolled up by Category Group for {selectedWeek}</div>
+              <div className="tw" style={{ marginTop: '15px', overflowX: 'auto' }}>
+                <table className="dt">
+                  <thead>
+                    <tr>
+                      <th>Group Name</th>
+                      <th className="num">Impressions</th>
+                      <th className="num">Clicks</th>
+                      <th className="num">CTR</th>
+                      <th className="num">Cost</th>
+                      <th className="num">Conversions</th>
+                      <th className="num">BL Approved</th>
+                      <th className="num">BL Sold</th>
+                      <th className="num">Txn Approved</th>
+                      <th className="num">BLNI</th>
+                      <th className="num">Txn (Appr) %</th>
+                      <th className="num">BL Sold %</th>
+                      <th className="num">Cost / Txn</th>
+                      <th className="num">MCAT Div.</th>
+                      <th className="num">PMCAT Div.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupPerformanceData.rows.map((row) => (
+                      <tr key={row.name}>
+                        <td style={{ fontWeight: 500 }}>{row.name}</td>
+                        <td className="num">{formatVal(row.impressions, 'impressions')}</td>
+                        <td className="num">{formatVal(row.clicks, 'clicks')}</td>
+                        <td className="num" style={{ color: C.g }}>{formatVal(row.ctr, 'ctr')}</td>
+                        <td className="num">{formatVal(row.cost, 'cost')}</td>
+                        <td className="num">{formatVal(row.conversions, 'conversions')}</td>
+                        <td className="num">{formatVal(row.bl_approved, 'bl_approved')}</td>
+                        <td className="num">{formatVal(row.bl_sold_approved, 'bl_sold_approved')}</td>
+                        <td className="num">{formatVal(row.bl_txn_approved, 'bl_txn_approved')}</td>
+                        <td className="num">{formatVal(row.blni, 'blni')}</td>
+                        <td className="num" style={{ color: '#29b6f6' }}>{formatVal(row.txn_approved_pct, 'txn_approved_pct')}</td>
+                        <td className="num" style={{ color: '#ffca28' }}>{formatVal(row.bl_sold_pct, 'bl_sold_pct')}</td>
+                        <td className="num" style={{ color: '#ef5350' }}>{formatVal(row.cost_per_txn, 'cost_per_txn')}</td>
+                        <td className="num" style={{ color: '#ab47bc' }}>{formatVal(row.mcat_diversity_pct, 'mcat_diversity_pct')}</td>
+                        <td className="num" style={{ color: '#ec407a' }}>{formatVal(row.pmcat_diversity_pct, 'pmcat_diversity_pct')}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ background: 'rgba(255, 255, 255, 0.07)', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                      <td style={{ fontWeight: 'bold' }}>{groupPerformanceData.totals.name}</td>
+                      <td className="num" style={{ fontWeight: 'bold' }}>{formatVal(groupPerformanceData.totals.impressions, 'impressions')}</td>
+                      <td className="num" style={{ fontWeight: 'bold' }}>{formatVal(groupPerformanceData.totals.clicks, 'clicks')}</td>
+                      <td className="num" style={{ fontWeight: 'bold', color: C.g }}>{formatVal(groupPerformanceData.totals.ctr, 'ctr')}</td>
+                      <td className="num" style={{ fontWeight: 'bold' }}>{formatVal(groupPerformanceData.totals.cost, 'cost')}</td>
+                      <td className="num" style={{ fontWeight: 'bold' }}>{formatVal(groupPerformanceData.totals.conversions, 'conversions')}</td>
+                      <td className="num" style={{ fontWeight: 'bold' }}>{formatVal(groupPerformanceData.totals.bl_approved, 'bl_approved')}</td>
+                      <td className="num" style={{ fontWeight: 'bold' }}>{formatVal(groupPerformanceData.totals.bl_sold_approved, 'bl_sold_approved')}</td>
+                      <td className="num" style={{ fontWeight: 'bold' }}>{formatVal(groupPerformanceData.totals.bl_txn_approved, 'bl_txn_approved')}</td>
+                      <td className="num" style={{ fontWeight: 'bold' }}>{formatVal(groupPerformanceData.totals.blni, 'blni')}</td>
+                      <td className="num" style={{ fontWeight: 'bold', color: '#29b6f6' }}>{formatVal(groupPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
+                      <td className="num" style={{ fontWeight: 'bold', color: '#ffca28' }}>{formatVal(groupPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
+                      <td className="num" style={{ fontWeight: 'bold', color: '#ef5350' }}>{formatVal(groupPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
+                      <td className="num" style={{ fontWeight: 'bold', color: '#ab47bc' }}>{formatVal(groupPerformanceData.totals.mcat_diversity_pct, 'mcat_diversity_pct')}</td>
+                      <td className="num" style={{ fontWeight: 'bold', color: '#ec407a' }}>{formatVal(groupPerformanceData.totals.pmcat_diversity_pct, 'pmcat_diversity_pct')}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
         </>
       )}

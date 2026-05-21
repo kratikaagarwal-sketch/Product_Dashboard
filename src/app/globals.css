@@ -1,11 +1,13 @@
 :root {
   --bg: #0c1015;
+  --bg2: #10151b;
   --surf: #141a22;
   --surf2: #1c2530;
   --surf3: #222e3d;
   --bdr: #253040;
   --bdr2: #2e3d50;
   --txt: #e2eaf4;
+  --fg: #e2eaf4;
   --muted: #7a90a8;
   --dim: #4a6070;
   --teal: #00cba4;
@@ -22,6 +24,32 @@
   --pdim: rgba(167, 139, 250, .10);
   --r: 10px;
   --rs: 6px;
+}
+
+body.light-theme {
+  --bg: #f8fafc;
+  --bg2: #f1f5f9;
+  --surf: #ffffff;
+  --surf2: #f1f5f9;
+  --surf3: #e2e8f0;
+  --bdr: #cbd5e1;
+  --bdr2: #94a3b8;
+  --txt: #0f172a;
+  --fg: #0f172a;
+  --muted: #475569;
+  --dim: #64748b;
+  --teal: #0d9488;
+  --tdim: rgba(13, 148, 136, .12);
+  --blue: #2563eb;
+  --bdim: rgba(37, 99, 235, .12);
+  --green: #16a34a;
+  --gdim: rgba(22, 163, 74, .10);
+  --red: #dc2626;
+  --rdim: rgba(220, 38, 38, .10);
+  --amber: #ea580c;
+  --adim: rgba(234, 88, 12, .10);
+  --purple: #7c3aed;
+  --pdim: rgba(124, 58, 237, .10);
 }
 
 * {

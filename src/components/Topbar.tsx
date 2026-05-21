@@ -10,7 +10,37 @@ interface TopbarProps {
 
 export default function Topbar({ activeTab }: TopbarProps) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') as 'dark' | 'light';
+    if (savedTheme) {
+      setTheme(savedTheme);
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+      } else {
+        document.body.classList.remove('light-theme');
+      }
+    } else {
+      const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      if (prefersLight) {
+        setTheme('light');
+        document.body.classList.add('light-theme');
+      }
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('theme', nextTheme);
+    if (nextTheme === 'light') {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -52,6 +82,13 @@ export default function Topbar({ activeTab }: TopbarProps) {
         <div className="tb-sub">{SUBS[activeTab] || ''}</div>
       </div>
       <div className="tb-right">
+        <button 
+          className="btn" 
+          onClick={toggleTheme} 
+          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
+        </button>
         <div style={{ position: 'relative' }} ref={dropdownRef}>
           <button className="btn btn-p" onClick={() => setShowDropdown(!showDropdown)}>
             📤 Export

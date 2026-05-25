@@ -191,7 +191,9 @@ export default function DailyCampaignTab() {
           bl_sold_approved: 0,
           bl_approved: 0,
           bl_txn_approved: 0,
-          blni: 0
+          blni: 0,
+          mcatSet: new Set(),
+          pmcatSet: new Set()
         });
       }
       const existing = rolledUp.get(key);
@@ -203,6 +205,8 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
+      if (d.mcat) existing.mcatSet.add(d.mcat);
+      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
     });
 
     const rows = Array.from(rolledUp.values()).map(d => ({
@@ -210,8 +214,18 @@ export default function DailyCampaignTab() {
       ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
       txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
       bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
-    }));
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
+      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
+    })).map(r => {
+      // remove internal sets from final row
+      const { mcatSet, pmcatSet, ...out } = r as any;
+      return out;
+    });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -228,7 +242,13 @@ export default function DailyCampaignTab() {
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
-      cost_per_txn: 0
+      cost_per_txn: 0,
+      cpc: 0,
+      cost_per_conversion: 0,
+      cost_per_bl: 0,
+      mcat_div: 0,
+      pmcat_div: 0,
+      blni_pct: 0
     };
 
     rows.forEach(r => {
@@ -246,6 +266,13 @@ export default function DailyCampaignTab() {
     totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
     totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
     totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
+    totals.cpc = totals.clicks > 0 ? totals.cost / totals.clicks : 0;
+    totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
+    totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
+    totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
+    const activeData = weeklyData.filter(d => d.impressions > 0);
+    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
+    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity]);
@@ -272,7 +299,9 @@ export default function DailyCampaignTab() {
           bl_sold_approved: 0,
           bl_approved: 0,
           bl_txn_approved: 0,
-          blni: 0
+          blni: 0,
+          mcatSet: new Set(),
+          pmcatSet: new Set()
         });
       }
       const existing = rolledUp.get(key);
@@ -284,6 +313,8 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
+      if (d.mcat) existing.mcatSet.add(d.mcat);
+      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
     });
 
     const rows = Array.from(rolledUp.values()).map(d => ({
@@ -291,8 +322,17 @@ export default function DailyCampaignTab() {
       ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
       txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
       bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
-    }));
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
+      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
+    })).map(r => {
+      const { mcatSet, pmcatSet, ...out } = r as any;
+      return out;
+    });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -309,7 +349,13 @@ export default function DailyCampaignTab() {
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
-      cost_per_txn: 0
+      cost_per_txn: 0,
+      cpc: 0,
+      cost_per_conversion: 0,
+      cost_per_bl: 0,
+      mcat_div: 0,
+      pmcat_div: 0,
+      blni_pct: 0
     };
 
     rows.forEach(r => {
@@ -327,6 +373,13 @@ export default function DailyCampaignTab() {
     totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
     totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
     totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
+    totals.cpc = totals.clicks > 0 ? totals.cost / totals.clicks : 0;
+    totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
+    totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
+    totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
+    const activeData = filteredData.filter(d => d.impressions > 0);
+    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
+    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity, selectedGroup]);
@@ -354,7 +407,9 @@ export default function DailyCampaignTab() {
           bl_sold_approved: 0,
           bl_approved: 0,
           bl_txn_approved: 0,
-          blni: 0
+          blni: 0,
+          mcatSet: new Set(),
+          pmcatSet: new Set()
         });
       }
       const existing = rolledUp.get(key);
@@ -366,6 +421,8 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
+      if (d.mcat) existing.mcatSet.add(d.mcat);
+      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
     });
 
     const rows = Array.from(rolledUp.values()).map(d => ({
@@ -373,8 +430,17 @@ export default function DailyCampaignTab() {
       ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
       txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
       bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
-    }));
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
+      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
+    })).map(r => {
+      const { mcatSet, pmcatSet, ...out } = r as any;
+      return out;
+    });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -391,7 +457,13 @@ export default function DailyCampaignTab() {
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
-      cost_per_txn: 0
+      cost_per_txn: 0,
+      cpc: 0,
+      cost_per_conversion: 0,
+      cost_per_bl: 0,
+      mcat_div: 0,
+      pmcat_div: 0,
+      blni_pct: 0
     };
 
     rows.forEach(r => {
@@ -409,6 +481,13 @@ export default function DailyCampaignTab() {
     totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
     totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
     totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
+    totals.cpc = totals.clicks > 0 ? totals.cost / totals.clicks : 0;
+    totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
+    totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
+    totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
+    const activeData = filteredData.filter(d => d.impressions > 0);
+    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
+    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity, selectedGroup, selectedPmcat, selectedMcat]);

@@ -103,7 +103,7 @@ export default function DailyCampaignTab() {
 
   const compareWeeksList = useMemo(() => {
     if (weeks.length < 2) return [];
-    return weeks.slice(1, 1 + compareWeeksCount);
+    return weeks.slice(0, compareWeeksCount);
   }, [weeks, compareWeeksCount]);
 
   // Extract unique items for the cascading filters from the enriched data
@@ -673,7 +673,7 @@ export default function DailyCampaignTab() {
     return (
       <div className="tab on" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px', flexDirection: 'column', gap: '16px' }}>
         <div style={{ width: '40px', height: '40px', border: '3px solid var(--bdr2)', borderTopColor: 'var(--teal)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        <span style={{ color: 'var(--muted)', fontSize: '14px' }}>Querying Redshift & Performing Dynamic Mapping...</span>
+        <span style={{ color: 'var(--purple)', fontWeight: 600, fontSize: '14px' }}>Querying Redshift & Performing Dynamic Mapping...</span>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
@@ -792,11 +792,11 @@ export default function DailyCampaignTab() {
       {isCompareMode && bestKpis ? (
         <div className="compare-view">
           {/* Best KPIs Banner */}
-          <div className="banner" style={{ marginBottom: '18px', background: 'linear-gradient(90deg, #1e1e24, #121216)', borderLeft: '4px solid #ab47bc' }}>
+          <div className="banner" style={{ marginBottom: '18px', background: 'linear-gradient(90deg, var(--surf2), var(--surf))', borderLeft: '4px solid #ab47bc' }}>
             <div className="bn-left">
               <div style={{ fontSize: '24px' }}>🏆</div>
               <div>
-                <div className="bn-title" style={{ color: '#fff' }}>Best Ever KPIs</div>
+                <div className="bn-title" style={{ color: 'var(--txt)' }}>Best Ever KPIs</div>
                 <div className="bn-sub">Across {compareWeeksCount} {timePeriod === 'weekly' ? 'weeks' : timePeriod === 'daily' ? 'days' : 'months'} ({compareWeeksList[compareWeeksList.length - 1]} to {compareWeeksList[0]})</div>
               </div>
             </div>
@@ -804,37 +804,37 @@ export default function DailyCampaignTab() {
               <div>
                 <div className="bn-val" style={{ color: C.b }}>{bestKpis.impressions.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Impressions</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.impressions.week)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.impressions.week)}</div>
               </div>
               <div>
                 <div className="bn-val" style={{ color: C.t }}>{bestKpis.clicks.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Clicks</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.clicks.week)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.clicks.week)}</div>
               </div>
               <div>
                 <div className="bn-val" style={{ color: C.g }}>{bestKpis.ctr.val.toFixed(1)}%</div>
                 <div className="bn-lbl">CTR</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.ctr.week)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.ctr.week)}</div>
               </div>
               <div>
                 <div className="bn-val" style={{ color: C.r }}>₹{bestKpis.cost.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Cost (Min)</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost.week)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost.week)}</div>
               </div>
               <div>
                 <div className="bn-val" style={{ color: C.a }}>{bestKpis.conversions.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Conversions</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.conversions.week)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.conversions.week)}</div>
               </div>
               <div>
                 <div className="bn-val" style={{ color: '#29b6f6' }}>{bestKpis.txn_approved_pct.val.toFixed(1)}%</div>
                 <div className="bn-lbl">Txn (Appr) %</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.txn_approved_pct.week)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.txn_approved_pct.week)}</div>
               </div>
               <div>
                 <div className="bn-val" style={{ color: '#ef5350' }}>₹{bestKpis.cost_per_txn.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
                 <div className="bn-lbl">Cost/Txn (Min)</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost_per_txn.week)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost_per_txn.week)}</div>
               </div>
             </div>
           </div>
@@ -850,7 +850,7 @@ export default function DailyCampaignTab() {
                   <span style={{ fontSize: '14px', lineHeight: '1.4' }}>{insight}</span>
                 </li>
               ))}
-              {aiInsights.length === 0 && <li style={{ color: 'var(--muted)' }}>Not enough data to generate insights.</li>}
+              {aiInsights.length === 0 && <li style={{ color: 'var(--purple)', fontWeight: 600 }}>Not enough data to generate insights.</li>}
             </ul>
           </div>
 
@@ -943,7 +943,7 @@ export default function DailyCampaignTab() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
               <div>
-                <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Google Ads Performance</div>
+                <div style={{ color: 'var(--txt)', fontSize: '13px', fontWeight: 600, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Google Ads Performance</div>
                 <div className="bn-stats" style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
                   <div><div className="bn-val" style={{ color: C.b }}>{formatVal(kpiStats.impressions, 'impressions')}</div><div className="bn-lbl">Impressions</div></div>
                   <div><div className="bn-val" style={{ color: C.t }}>{formatVal(kpiStats.clicks, 'clicks')}</div><div className="bn-lbl">Clicks</div></div>
@@ -955,7 +955,7 @@ export default function DailyCampaignTab() {
                 </div>
               </div>
               <div style={{ borderTop: '1px solid var(--bdr2)', paddingTop: '15px' }}>
-                <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Lead Performance</div>
+                <div style={{ color: 'var(--txt)', fontSize: '13px', fontWeight: 600, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Lead Performance</div>
                 <div className="bn-stats" style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
                   <div><div className="bn-val" style={{ color: C.p }}>{formatVal(kpiStats.bl_approved, 'bl_approved')}</div><div className="bn-lbl">BL Approved</div></div>
                   <div><div className="bn-val" style={{ color: '#66bb6a' }}>{formatVal(kpiStats.bl_sold_approved, 'bl_sold_approved')}</div><div className="bn-lbl">BL Sold</div></div>
@@ -984,7 +984,7 @@ export default function DailyCampaignTab() {
                   <span style={{ fontSize: '14px', lineHeight: '1.4' }}>{insight}</span>
                 </li>
               ))}
-              {aiInsights.length === 0 && <li style={{ color: 'var(--muted)' }}>Not enough data to generate insights for this selection.</li>}
+              {aiInsights.length === 0 && <li style={{ color: 'var(--purple)', fontWeight: 600 }}>Not enough data to generate insights for this selection.</li>}
             </ul>
           </div>
 
@@ -992,16 +992,13 @@ export default function DailyCampaignTab() {
             <h2>{granularity.toUpperCase()} Ranking Analysis <span>{timePeriod === 'weekly' ? 'Week' : timePeriod === 'daily' ? 'Date' : 'Month'} of {selectedWeek}</span></h2>
           </div>
 
-          <div className="ai-tabs" style={{ marginBottom: '20px' }}>
-            {METRICS.map(m => (
-              <button
-                key={m.key}
-                className={`ai-tab ${rankMetric === m.key ? 'on' : ''}`}
-                onClick={() => setRankMetric(m.key)}
-              >
-                Rank by {m.label}
-              </button>
-            ))}
+          <div style={{ marginBottom: '20px', maxWidth: '300px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--teal)', fontWeight: 'bold' }}>Rank By KPI</label>
+            <SearchableSelect 
+              value={rankMetric}
+              onChange={(val) => setRankMetric(val)}
+              options={METRICS.map(m => ({ label: `Rank by ${m.label}`, value: m.key }))}
+            />
           </div>
 
           <div className="cg" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
@@ -1020,7 +1017,7 @@ export default function DailyCampaignTab() {
                   <tbody>
                     {rankingData.top10.map((item, idx) => (
                       <tr key={item.name + idx}>
-                        <td style={{ color: 'var(--muted)', width: '40px' }}>#{idx + 1}</td>
+                        <td style={{ color: 'var(--purple)', fontWeight: 600, width: '40px' }}>#{idx + 1}</td>
                         <td style={{ fontWeight: 500 }}>{item.name}</td>
                         <td className="num hi">{formatVal(item[rankMetric], rankMetric)}</td>
                       </tr>
@@ -1046,7 +1043,7 @@ export default function DailyCampaignTab() {
                   <tbody>
                     {rankingData.bottom10.map((item, idx) => (
                       <tr key={item.name + idx}>
-                        <td style={{ color: 'var(--muted)', width: '40px' }}>#{idx + 1}</td>
+                        <td style={{ color: 'var(--purple)', fontWeight: 600, width: '40px' }}>#{idx + 1}</td>
                         <td style={{ fontWeight: 500 }}>{item.name}</td>
                         <td className="num bd">{formatVal(item[rankMetric], rankMetric)}</td>
                       </tr>

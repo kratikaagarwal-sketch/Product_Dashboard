@@ -78,9 +78,9 @@ export default function SearchableSelect({ options, value, onChange, placeholder
               style={{
                 width: '100%',
                 padding: '8px',
-                background: 'var(--bg1, #121216)',
+                background: 'var(--bg, #121216)',
                 border: '1px solid var(--bdr, #2a2a35)',
-                color: '#fff',
+                color: 'var(--txt, #fff)',
                 borderRadius: '4px',
                 outline: 'none'
               }}
@@ -101,7 +101,7 @@ export default function SearchableSelect({ options, value, onChange, placeholder
                     padding: '8px 12px',
                     cursor: 'pointer',
                     background: opt.value === value ? 'var(--teal, #00cba4)' : 'transparent',
-                    color: opt.value === value ? '#000' : '#fff',
+                    color: opt.value === value ? '#000' : 'var(--txt, #fff)',
                     borderBottom: '1px solid var(--bdr, #2a2a35)',
                   }}
                   onMouseEnter={(e) => {

@@ -988,72 +988,78 @@ export default function DailyCampaignTab() {
             </ul>
           </div>
 
-          <div className="sh" style={{ marginTop: '30px' }}>
-            <h2>{granularity.toUpperCase()} Ranking Analysis <span>{timePeriod === 'weekly' ? 'Week' : timePeriod === 'daily' ? 'Date' : 'Month'} of {selectedWeek}</span></h2>
-          </div>
-
-          <div style={{ marginBottom: '20px', maxWidth: '300px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--teal)', fontWeight: 'bold' }}>Rank By KPI</label>
-            <SearchableSelect 
-              value={rankMetric}
-              onChange={(val) => setRankMetric(val)}
-              options={METRICS.map(m => ({ label: `Rank by ${m.label}`, value: m.key }))}
-            />
-          </div>
-
-          <div className="cg" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
-            <div className="cc" style={{ margin: 0 }}>
-              <div className="ct">🏆 Top 10 {granularity.toUpperCase()}s</div>
-              <div className="cs">Highest {METRICS.find(m => m.key === rankMetric)?.label}</div>
-              <div className="tw" style={{ marginTop: '15px' }}>
-                <table className="dt">
-                  <thead>
-                    <tr>
-                      <th>Rank</th>
-                      <th>{granularity.toUpperCase()} Name</th>
-                      <th className="num">{METRICS.find(m => m.key === rankMetric)?.label}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rankingData.top10.map((item, idx) => (
-                      <tr key={item.name + idx}>
-                        <td style={{ color: 'var(--purple)', fontWeight: 600, width: '40px' }}>#{idx + 1}</td>
-                        <td style={{ fontWeight: 500 }}>{item.name}</td>
-                        <td className="num hi">{formatVal(item[rankMetric], rankMetric)}</td>
-                      </tr>
-                    ))}
-                    {rankingData.top10.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No data</td></tr>}
-                  </tbody>
-                </table>
+          { ((granularity === 'group' && selectedGroup === 'all') ||
+             (granularity === 'pmcat' && selectedPmcat === 'all') ||
+             (granularity === 'mcat' && selectedMcat === 'all')) && (
+            <>
+              <div className="sh" style={{ marginTop: '30px' }}>
+                <h2>{granularity.toUpperCase()} Ranking Analysis <span>{timePeriod === 'weekly' ? 'Week' : timePeriod === 'daily' ? 'Date' : 'Month'} of {selectedWeek}</span></h2>
               </div>
-            </div>
 
-            <div className="cc" style={{ margin: 0 }}>
-              <div className="ct">⚠️ Bottom 10 {granularity.toUpperCase()}s</div>
-              <div className="cs">Lowest {METRICS.find(m => m.key === rankMetric)?.label} {rankMetric === 'ctr' ? '(Min 100 Impr)' : ''}</div>
-              <div className="tw" style={{ marginTop: '15px' }}>
-                <table className="dt">
-                  <thead>
-                    <tr>
-                      <th>Rank</th>
-                      <th>{granularity.toUpperCase()} Name</th>
-                      <th className="num">{METRICS.find(m => m.key === rankMetric)?.label}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rankingData.bottom10.map((item, idx) => (
-                      <tr key={item.name + idx}>
-                        <td style={{ color: 'var(--purple)', fontWeight: 600, width: '40px' }}>#{idx + 1}</td>
-                        <td style={{ fontWeight: 500 }}>{item.name}</td>
-                        <td className="num bd">{formatVal(item[rankMetric], rankMetric)}</td>
-                      </tr>
-                    ))}
-                    {rankingData.bottom10.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No data</td></tr>}
-                  </tbody>
-                </table>
+              <div style={{ marginBottom: '20px', maxWidth: '300px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--teal)', fontWeight: 'bold' }}>Rank By KPI</label>
+                <SearchableSelect 
+                  value={rankMetric}
+                  onChange={(val) => setRankMetric(val)}
+                  options={METRICS.map(m => ({ label: `Rank by ${m.label}`, value: m.key }))}
+                />
               </div>
-            </div>
-          </div>
+
+              <div className="cg" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
+                <div className="cc" style={{ margin: 0 }}>
+                  <div className="ct">🏆 Top 10 {granularity.toUpperCase()}s</div>
+                  <div className="cs">Highest {METRICS.find(m => m.key === rankMetric)?.label}</div>
+                  <div className="tw" style={{ marginTop: '15px' }}>
+                    <table className="dt">
+                      <thead>
+                        <tr>
+                          <th>Rank</th>
+                          <th>{granularity.toUpperCase()} Name</th>
+                          <th className="num">{METRICS.find(m => m.key === rankMetric)?.label}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rankingData.top10.map((item, idx) => (
+                          <tr key={item.name + idx}>
+                            <td style={{ color: 'var(--purple)', fontWeight: 600, width: '40px' }}>#{idx + 1}</td>
+                            <td style={{ fontWeight: 500 }}>{item.name}</td>
+                            <td className="num hi">{formatVal(item[rankMetric], rankMetric)}</td>
+                          </tr>
+                        ))}
+                        {rankingData.top10.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No data</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="cc" style={{ margin: 0 }}>
+                  <div className="ct">⚠️ Bottom 10 {granularity.toUpperCase()}s</div>
+                  <div className="cs">Lowest {METRICS.find(m => m.key === rankMetric)?.label} {rankMetric === 'ctr' ? '(Min 100 Impr)' : ''}</div>
+                  <div className="tw" style={{ marginTop: '15px' }}>
+                    <table className="dt">
+                      <thead>
+                        <tr>
+                          <th>Rank</th>
+                          <th>{granularity.toUpperCase()} Name</th>
+                          <th className="num">{METRICS.find(m => m.key === rankMetric)?.label}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rankingData.bottom10.map((item, idx) => (
+                          <tr key={item.name + idx}>
+                            <td style={{ color: 'var(--purple)', fontWeight: 600, width: '40px' }}>#{idx + 1}</td>
+                            <td style={{ fontWeight: 500 }}>{item.name}</td>
+                            <td className="num bd">{formatVal(item[rankMetric], rankMetric)}</td>
+                          </tr>
+                        ))}
+                        {rankingData.bottom10.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center' }}>No data</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="sh" style={{ marginTop: '30px' }}>
             <h2>{timePeriod === 'weekly' ? '12-Week Trend' : timePeriod === 'daily' ? '30-Day Trend' : '12-Month Trend'} <span>{getEntityTitle()}</span></h2>

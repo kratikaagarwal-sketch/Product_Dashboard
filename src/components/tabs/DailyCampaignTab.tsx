@@ -191,7 +191,9 @@ export default function DailyCampaignTab() {
           bl_sold_approved: 0,
           bl_approved: 0,
           bl_txn_approved: 0,
-          blni: 0
+          blni: 0,
+          mcatSet: new Set(),
+          pmcatSet: new Set()
         });
       }
       const existing = rolledUp.get(key);
@@ -203,6 +205,8 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
+      if (d.mcat) existing.mcatSet.add(d.mcat);
+      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
     });
 
     const rows = Array.from(rolledUp.values()).map(d => ({
@@ -210,8 +214,18 @@ export default function DailyCampaignTab() {
       ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
       txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
       bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
-    }));
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
+      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
+    })).map(r => {
+      // remove internal sets from final row
+      const { mcatSet, pmcatSet, ...out } = r as any;
+      return out;
+    });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -228,7 +242,13 @@ export default function DailyCampaignTab() {
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
-      cost_per_txn: 0
+      cost_per_txn: 0,
+      cpc: 0,
+      cost_per_conversion: 0,
+      cost_per_bl: 0,
+      mcat_div: 0,
+      pmcat_div: 0,
+      blni_pct: 0
     };
 
     rows.forEach(r => {
@@ -246,6 +266,13 @@ export default function DailyCampaignTab() {
     totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
     totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
     totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
+    totals.cpc = totals.clicks > 0 ? totals.cost / totals.clicks : 0;
+    totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
+    totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
+    totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
+    const activeData = weeklyData.filter(d => d.impressions > 0);
+    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
+    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity]);
@@ -272,7 +299,9 @@ export default function DailyCampaignTab() {
           bl_sold_approved: 0,
           bl_approved: 0,
           bl_txn_approved: 0,
-          blni: 0
+          blni: 0,
+          mcatSet: new Set(),
+          pmcatSet: new Set()
         });
       }
       const existing = rolledUp.get(key);
@@ -284,6 +313,8 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
+      if (d.mcat) existing.mcatSet.add(d.mcat);
+      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
     });
 
     const rows = Array.from(rolledUp.values()).map(d => ({
@@ -291,8 +322,17 @@ export default function DailyCampaignTab() {
       ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
       txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
       bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
-    }));
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
+      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
+    })).map(r => {
+      const { mcatSet, pmcatSet, ...out } = r as any;
+      return out;
+    });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -309,7 +349,13 @@ export default function DailyCampaignTab() {
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
-      cost_per_txn: 0
+      cost_per_txn: 0,
+      cpc: 0,
+      cost_per_conversion: 0,
+      cost_per_bl: 0,
+      mcat_div: 0,
+      pmcat_div: 0,
+      blni_pct: 0
     };
 
     rows.forEach(r => {
@@ -327,6 +373,13 @@ export default function DailyCampaignTab() {
     totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
     totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
     totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
+    totals.cpc = totals.clicks > 0 ? totals.cost / totals.clicks : 0;
+    totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
+    totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
+    totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
+    const activeData = filteredData.filter(d => d.impressions > 0);
+    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
+    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity, selectedGroup]);
@@ -354,7 +407,9 @@ export default function DailyCampaignTab() {
           bl_sold_approved: 0,
           bl_approved: 0,
           bl_txn_approved: 0,
-          blni: 0
+          blni: 0,
+          mcatSet: new Set(),
+          pmcatSet: new Set()
         });
       }
       const existing = rolledUp.get(key);
@@ -366,6 +421,8 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
+      if (d.mcat) existing.mcatSet.add(d.mcat);
+      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
     });
 
     const rows = Array.from(rolledUp.values()).map(d => ({
@@ -373,8 +430,17 @@ export default function DailyCampaignTab() {
       ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
       txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
       bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
-    }));
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
+      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
+    })).map(r => {
+      const { mcatSet, pmcatSet, ...out } = r as any;
+      return out;
+    });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -391,7 +457,13 @@ export default function DailyCampaignTab() {
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
-      cost_per_txn: 0
+      cost_per_txn: 0,
+      cpc: 0,
+      cost_per_conversion: 0,
+      cost_per_bl: 0,
+      mcat_div: 0,
+      pmcat_div: 0,
+      blni_pct: 0
     };
 
     rows.forEach(r => {
@@ -409,6 +481,13 @@ export default function DailyCampaignTab() {
     totals.txn_approved_pct = totals.bl_approved > 0 ? (totals.bl_txn_approved / totals.bl_approved) * 100 : 0;
     totals.bl_sold_pct = totals.bl_approved > 0 ? (totals.bl_sold_approved / totals.bl_approved) * 100 : 0;
     totals.cost_per_txn = totals.bl_txn_approved > 0 ? totals.cost / totals.bl_txn_approved : 0;
+    totals.cpc = totals.clicks > 0 ? totals.cost / totals.clicks : 0;
+    totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
+    totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
+    totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
+    const activeData = filteredData.filter(d => d.impressions > 0);
+    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
+    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity, selectedGroup, selectedPmcat, selectedMcat]);
@@ -599,7 +678,7 @@ export default function DailyCampaignTab() {
     } else if (granularity === 'mcat' && mcatPerformanceData) {
       filename = `mcat_performance_${timePeriod}_${selectedWeek}.csv`;
     }
-    
+
     let headers = ['Group Name', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
     if (granularity === 'pmcat') headers = ['PMCAT', 'Parent Group', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
     if (granularity === 'mcat') headers = ['MCAT', 'Parent PMCAT', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
@@ -746,7 +825,7 @@ export default function DailyCampaignTab() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', padding: '10px', background: 'var(--bg2)', borderRadius: '8px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '5px' }}>Group Filter</label>
-            <SearchableSelect 
+            <SearchableSelect
               value={selectedGroup}
               onChange={(val) => { setSelectedGroup(val); resetFilters('pmcat'); }}
               options={[
@@ -760,7 +839,7 @@ export default function DailyCampaignTab() {
           {(granularity === 'pmcat' || granularity === 'mcat') && (
             <div>
               <label style={{ display: 'block', marginBottom: '5px' }}>PMCAT Filter</label>
-              <SearchableSelect 
+              <SearchableSelect
                 value={selectedPmcat}
                 onChange={(val) => { setSelectedPmcat(val); resetFilters('mcat'); }}
                 options={[
@@ -775,7 +854,7 @@ export default function DailyCampaignTab() {
           {granularity === 'mcat' && (
             <div>
               <label style={{ display: 'block', marginBottom: '5px' }}>MCAT Filter</label>
-              <SearchableSelect 
+              <SearchableSelect
                 value={selectedMcat}
                 onChange={(val) => setSelectedMcat(val)}
                 options={[
@@ -998,7 +1077,7 @@ export default function DailyCampaignTab() {
 
               <div style={{ marginBottom: '20px', maxWidth: '300px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', color: 'var(--teal)', fontWeight: 'bold' }}>Rank By KPI</label>
-                <SearchableSelect 
+                <SearchableSelect
                   value={rankMetric}
                   onChange={(val) => setRankMetric(val)}
                   options={METRICS.map(m => ({ label: `Rank by ${m.label}`, value: m.key }))}
@@ -1423,3 +1502,5 @@ export default function DailyCampaignTab() {
     </div>
   );
 }
+
+

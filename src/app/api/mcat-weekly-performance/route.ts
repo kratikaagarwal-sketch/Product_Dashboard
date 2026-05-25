@@ -85,7 +85,9 @@ function extractDateString(val: any): string {
 const query4 = `
 SELECT 
     a.iil_google_ads_lable_name AS flag,
-    gl.glcat_mcat_name
+    gl.glcat_mcat_name,
+    gl.glcat_grp_name,
+    gl.prime_pmcat_name
 FROM im_dwh_rpt.glcat_mcat_addn_attributes g
 JOIN im_dwh.iil_google_ads_lable_master a
     ON a.iil_google_ads_lable_master_id = g.fk_iil_google_ads_lable_master_id
@@ -196,6 +198,8 @@ ORDER BY 1 DESC;
 SELECT 
     ${query3Date},
     b.glcat_mcat_name AS mcat_name,
+    b.glcat_grp_name AS group_name,
+    b.prime_pmcat_name AS pmcat_name,
     SUM(a.bl_sold) AS bl_sold_approved,
     SUM(a.bl_approved) AS bl_approved,
     SUM(a.trans) AS bl_txn_approved,
@@ -206,7 +210,7 @@ LEFT JOIN im_dwh.dim_glcat_mcat b
     ON a.mcat_id = b.glcat_mcat_id
 WHERE
     ${query3Where}
-GROUP BY 1, 2
+GROUP BY 1, 2, 3, 4
 ORDER BY 1 DESC, 2;
     `;
 
@@ -239,6 +243,8 @@ ORDER BY 1 DESC, 2;
       mergedMap.set(key, {
         week_start_date: weekStr,
         mcat: mcatName,
+        group: 'Unknown Group',
+        pmcat: 'Unknown PMCAT',
         clicks,
         impressions,
         cost, // fallback to raw ads cost
@@ -272,10 +278,14 @@ ORDER BY 1 DESC, 2;
         existing.bl_txn_approved = bl_txn_approved;
         existing.blni = blni;
         existing.cost = cost; // Overwrite with campaign table cost
+        existing.group = row.group_name || 'Unknown Group';
+        existing.pmcat = row.pmcat_name || 'Unknown PMCAT';
       } else {
         mergedMap.set(key, {
           week_start_date: weekStr,
           mcat: mcatName,
+          group: row.group_name || 'Unknown Group',
+          pmcat: row.pmcat_name || 'Unknown PMCAT',
           clicks: 0,
           impressions: 0,
           cost, // Set campaign cost
@@ -309,7 +319,11 @@ ORDER BY 1 DESC, 2;
     debugLog(`res2 mapping complete. campaignData count: ${campaignData.length}`);
 
     debugLog('Mapping res4...');
-    const adsRunningMcats = res4.rows.map(row => row.glcat_mcat_name || 'Unknown');
+    const adsRunningMcats = res4.rows.map(row => ({
+      mcat: row.glcat_mcat_name || 'Unknown',
+      group: row.glcat_grp_name || 'Unknown Group',
+      pmcat: row.prime_pmcat_name || 'Unknown PMCAT'
+    }));
     debugLog(`res4 mapping complete. adsRunningMcats count: ${adsRunningMcats.length}`);
 
     debugLog('Returning JSON response...');

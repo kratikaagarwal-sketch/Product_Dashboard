@@ -11,11 +11,9 @@ interface TopbarProps {
 export default function Topbar({ activeTab }: TopbarProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMounted(true);
     const savedTheme = localStorage.getItem('theme') as 'dark' | 'light';
     if (savedTheme) {
       setTheme(savedTheme);
@@ -84,15 +82,13 @@ export default function Topbar({ activeTab }: TopbarProps) {
         <div className="tb-sub">{SUBS[activeTab] || ''}</div>
       </div>
       <div className="tb-right">
-        {mounted && (
-          <button 
-            className="btn" 
-            onClick={toggleTheme} 
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
-          </button>
-        )}
+        <button 
+          className="btn" 
+          onClick={toggleTheme} 
+          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
+        </button>
         <div style={{ position: 'relative' }} ref={dropdownRef}>
           <button className="btn btn-p" onClick={() => setShowDropdown(!showDropdown)}>
             📤 Export

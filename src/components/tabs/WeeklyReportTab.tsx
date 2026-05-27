@@ -30,6 +30,7 @@ const METRICS = [
   { section: 'DB Report', key: 'total_calls', label: 'Total calls', type: 'number' },
   { section: 'DB Report', key: 'enq_approved', label: 'Total Enquiry approved', type: 'number' },
   { section: 'DB Report', key: 'bl_approved', label: 'BL Approved', type: 'number' },
+  { section: 'DB Report', key: 'bl_approved_sender', label: 'BL Approved (Sender)', type: 'number' },
   { section: 'DB Report', key: 'transactions', label: 'Transactions', type: 'number' },
   { section: 'DB Report', key: 'txn_pct', label: 'Transactions (Approved) %', type: 'percent' },
   { section: 'DB Report', key: 'unique_sold', label: 'Unique Sold', type: 'number' },
@@ -37,7 +38,6 @@ const METRICS = [
   { section: 'DB Report', key: 'blni', label: 'BLNI', type: 'number' },
   { section: 'DB Report', key: 'blni_appr_pct', label: 'BLNI/ Approved %', type: 'percent' },
   { section: 'DB Report', key: 'blni_txn_pct', label: 'BLNI/ Transaction %', type: 'percent' },
-  { section: 'DB Report', key: 'bl_approved_center', label: 'BL Approved (Center)', type: 'na' },
   { section: 'DB Report', key: 'unique_purchaser', label: 'Unique Purchaser', type: 'number' },
 
   { section: 'Total PMCATs', key: 'pmcat_count', label: 'PMCAT Count (Ad running)', type: 'number' },
@@ -120,7 +120,12 @@ export default function WeeklyReportTab() {
         blni: d.blni || 0,
         enq_approved: d.enq_approved || 0,
         calls_approved: d.calls_approved || 0,
-        unq_purchaser: d.unq_purchaser || 0
+        unq_purchaser: d.unq_purchaser || 0,
+        fenq_bl_senders: d.fenq_bl_senders || 0,
+        intent_bl_senders: d.intent_bl_senders || 0,
+        direct_bl_senders: d.direct_bl_senders || 0,
+        flpns_bl_senders: d.flpns_bl_senders || 0,
+        whatsapp_bl_senders: d.whatsapp_bl_senders || 0
       };
     });
   }, [data]);
@@ -164,8 +169,9 @@ export default function WeeklyReportTab() {
 
   const calculateKpisForWeek = (week: string) => {
     const weekData = baseFilteredData.filter(d => d.week_start_date === week);
-    let totals = {
+    let totals: any = {
         bl_approved: 0,
+        bl_approved_sender: 0,
         total_cost: 0,
         bl_txn_approved: 0,
         bl_sold_approved: 0,
@@ -183,6 +189,7 @@ export default function WeeklyReportTab() {
 
     weekData.forEach(d => {
         totals.bl_approved += d.bl_approved || 0;
+        totals.bl_approved_sender += (d.fenq_bl_senders || 0) + (d.intent_bl_senders || 0) + (d.direct_bl_senders || 0) + (d.flpns_bl_senders || 0) + (d.whatsapp_bl_senders || 0);
         totals.total_cost += d.cost || 0;
         totals.bl_txn_approved += d.bl_txn_approved || 0;
         totals.bl_sold_approved += d.bl_sold_approved || 0;
@@ -268,6 +275,7 @@ export default function WeeklyReportTab() {
 
     return {
         bl_approved: totals.bl_approved,
+        bl_approved_sender: totals.bl_approved_sender,
         cost_per_bl,
         cost_per_txn,
         bl_sold_pct,

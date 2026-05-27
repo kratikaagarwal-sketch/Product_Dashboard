@@ -375,9 +375,8 @@ export default function WeeklyReportTab() {
     return selectedMcat === 'all' ? (selectedPmcat === 'all' ? 'All MCATs' : `MCATs in ${selectedPmcat}`) : selectedMcat;
   };
 
-  const downloadCsv = () => {
+  const buildCsvContent = () => {
     let csv = `Section,Metric,Best ever,${weeks.map(w => formatWeekLabel(w)).join(',')},delta % (+/- LW)\n`;
-    
     let currentSection = '';
     METRICS.forEach(m => {
       let row = '';
@@ -388,147 +387,199 @@ export default function WeeklyReportTab() {
         row += `,`;
       }
       row += `"${m.label}",`;
-      
       const bestVal = reportData.bestEver[m.key];
       row += `"${formatVal(bestVal, m.type).replace(/,/g, '')}",`;
-
       reportData.dataByWeek.forEach(d => {
         const val = (d.stats as any)[m.key];
         row += `"${formatVal(val, m.type).replace(/,/g, '')}",`;
       });
-
-      // Delta
       let deltaStr = 'N/A';
       if (reportData.dataByWeek.length >= 2 && m.type !== 'na') {
         const lw = (reportData.dataByWeek[reportData.dataByWeek.length - 1].stats as any)[m.key] || 0;
         const lw2 = (reportData.dataByWeek[reportData.dataByWeek.length - 2].stats as any)[m.key] || 0;
         if (lw2 > 0) {
-           const delta = ((lw - lw2) / lw2) * 100;
-           deltaStr = `${delta > 0 ? '+' : ''}${delta.toFixed(2)}%`;
+          const delta = ((lw - lw2) / lw2) * 100;
+          deltaStr = `${delta > 0 ? '+' : ''}${delta.toFixed(2)}%`;
         } else if (lw > 0) {
-           deltaStr = '+100.00%';
+          deltaStr = '+100.00%';
         } else {
-           deltaStr = '0.00%';
+          deltaStr = '0.00%';
         }
       }
       row += `"${deltaStr}"\n`;
       csv += row;
     });
-
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `weekly_report_${getEntityTitle().replace(/ /g, '_')}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    return csv;
   };
 
-  const downloadExcel = async () => {
+  const buildWorkbook = async () => {
     const ExcelJS = (await import('exceljs')).default;
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Weekly Report');
 
-    // Columns: Section, Metric, Best ever, ...Weeks..., Delta
+    // ── Columns ──────────────────────────────────────────────
     const columns: any[] = [
-      { header: 'Section', key: 'section', width: 25 },
-      { header: 'Metric', key: 'metric', width: 35 },
-      { header: 'Best ever', key: 'best', width: 15 },
+      { header: 'Section', key: 'section', width: 28 },
+      { header: 'Metric',  key: 'metric',  width: 38 },
+      { header: 'Best ever', key: 'best',  width: 16 },
     ];
-    weeks.forEach(w => columns.push({ header: formatWeekLabel(w), key: w, width: 15 }));
-    columns.push({ header: 'delta % (+/- LW)', key: 'delta', width: 15 });
-    
+    weeks.forEach(w => columns.push({ header: formatWeekLabel(w), key: w, width: 16 }));
+    columns.push({ header: 'delta % (+/- LW)', key: 'delta', width: 18 });
     ws.columns = columns;
 
-    // Header styling
+    // ── Header row styling ────────────────────────────────────
     const headerRow = ws.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.eachCell((cell, colNumber) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
-      if (colNumber === 3) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD700' } }; // Best ever yellow
-      else if (colNumber > 3 && colNumber < columns.length) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF87CEFA' } }; // Week blue
+    headerRow.font = { bold: true, size: 11 };
+    headerRow.height = 22;
+    headerRow.eachCell((cell, col) => {
+      cell.alignment = { vertical: 'middle', horizontal: col <= 2 ? 'left' : 'center', wrapText: true };
+      cell.border = {
+        bottom: { style: 'medium', color: { argb: 'FF888888' } },
+      };
+      if (col === 3) {
+        // Best ever → gold
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD700' } };
+      } else if (col > 3 && col < columns.length) {
+        // Week columns → steel blue
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+        cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+      } else if (col === columns.length) {
+        // Delta column → dark grey
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF404040' } };
+        cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+      } else {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+      }
     });
 
-    // Add data rows
-    METRICS.forEach(m => {
-      const rowData: any = {
-        section: m.section,
-        metric: m.label,
-      };
+    // ── Helper: apply number format ───────────────────────────
+    const applyNumFmt = (cell: any, type: string) => {
+      if (type === 'currency') cell.numFmt = '₹#,##0.0;[Red]-₹#,##0.0';
+      else if (type === 'percent') cell.numFmt = '0.00%';
+      else if (type === 'number')  cell.numFmt = '#,##0.0';
+    };
 
-      const setNumFormat = (cell: any, type: string) => {
-        if (type === 'currency') cell.numFmt = '₹#,##0.0;[Red]-₹#,##0.0';
-        else if (type === 'percent') cell.numFmt = '0.00%';
-        else if (type === 'number') cell.numFmt = '#,##0.0';
-      };
+    // ── Section grouping for merged cells ─────────────────────
+    // Track section first-row and last-row so we can merge the Section column
+    const sectionRanges: { name: string; startRow: number; endRow: number }[] = [];
+    let currentSection = '';
+    let sectionStart = 2; // row 1 = header
 
+    // ── Data rows ─────────────────────────────────────────────
+    METRICS.forEach((m, mIdx) => {
+      // Track section boundaries
+      if (m.section !== currentSection) {
+        if (currentSection !== '') {
+          sectionRanges.push({ name: currentSection, startRow: sectionStart, endRow: mIdx + 1 });
+        }
+        currentSection = m.section;
+        sectionStart = mIdx + 2; // +2 because header is row 1
+      }
+
+      const rowData: any = { section: m.section, metric: m.label };
+
+      // Best ever value
       const bestVal = reportData.bestEver[m.key];
       rowData.best = bestVal !== null ? (m.type === 'percent' ? bestVal / 100 : bestVal) : 'N/A';
-      
+
+      // Week values
       weeks.forEach(w => {
         const weekStat = reportData.dataByWeek.find(d => d.week === w)?.stats as any;
         const val = weekStat ? weekStat[m.key] : null;
-        rowData[w] = val !== null && val !== undefined ? (m.type === 'percent' ? val / 100 : val) : 'N/A';
+        rowData[w] = (val !== null && val !== undefined) ? (m.type === 'percent' ? val / 100 : val) : 'N/A';
       });
 
-      let deltaVal: any = 'N/A';
+      // Delta calculation
       let deltaNum = 0;
+      let deltaVal: any = 'N/A';
       let hasDelta = false;
       if (reportData.dataByWeek.length >= 2 && m.type !== 'na') {
-        const lw = (reportData.dataByWeek[reportData.dataByWeek.length - 1].stats as any)[m.key] || 0;
+        const lw  = (reportData.dataByWeek[reportData.dataByWeek.length - 1].stats as any)[m.key] || 0;
         const lw2 = (reportData.dataByWeek[reportData.dataByWeek.length - 2].stats as any)[m.key] || 0;
-        if (lw2 > 0) {
-          deltaNum = (lw - lw2) / lw2;
-          deltaVal = deltaNum;
-          hasDelta = true;
-        } else if (lw > 0) {
-          deltaNum = 1.0;
-          deltaVal = 1.0;
-          hasDelta = true;
-        } else {
-          deltaNum = 0.0;
-          deltaVal = 0.0;
-          hasDelta = true;
-        }
+        if (lw2 > 0)     { deltaNum = (lw - lw2) / lw2; deltaVal = deltaNum; hasDelta = true; }
+        else if (lw > 0) { deltaNum = 1.0; deltaVal = 1.0; hasDelta = true; }
+        else             { deltaNum = 0.0; deltaVal = 0.0; hasDelta = true; }
       }
       rowData.delta = deltaVal;
 
       const row = ws.addRow(rowData);
-      
-      // Formatting cells
-      setNumFormat(row.getCell(3), m.type);
-      row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3CD' } }; // Light yellow
-      
+      row.height = 18;
+
+      // Section cell style (left-aligned, bold, light background)
+      const sectionCell = row.getCell(1);
+      sectionCell.font = { bold: true };
+      sectionCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+      // Metric cell
+      const metricCell = row.getCell(2);
+      metricCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+      // Best ever cell (light gold background)
+      const bestCell = row.getCell(3);
+      applyNumFmt(bestCell, m.type);
+      bestCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3CD' } };
+      bestCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      bestCell.font = { bold: true, color: { argb: 'FF7B6000' } };
+
+      // Week cells
       let colIdx = 4;
-      weeks.forEach(w => {
-        setNumFormat(row.getCell(colIdx), m.type);
+      weeks.forEach(() => {
+        const cell = row.getCell(colIdx);
+        applyNumFmt(cell, m.type);
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        // Alternate row tint: very light blue
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: (mIdx % 2 === 0) ? 'FFE8F0FE' : 'FFFFFFFF' } };
         colIdx++;
       });
-      
+
+      // Delta cell with color-coded conditional formatting
       const deltaCell = row.getCell(colIdx);
       if (hasDelta) {
         deltaCell.numFmt = '+0.00%;[Red]-0.00%;0.00%';
-        // Conditional formatting background calculation
-        let isBad = false;
-        if (m.key.includes('cost_per') || m.key.includes('cpc') || m.key.includes('cost_per_txn') || m.key.includes('cost_per_bl')) {
-          if (deltaNum > 0) isBad = true;
-        } else {
-          if (deltaNum < 0) isBad = true;
-        }
-        
+        deltaCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        const isCostMetric = m.key.includes('cost_per') || m.key === 'cpc';
+        const isBad = isCostMetric ? deltaNum > 0 : deltaNum < 0;
         if (deltaNum !== 0) {
-          deltaCell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: isBad ? 'FFFFCDD2' : 'FFC8E6C9' } // Light red / Light green
-          };
+          deltaCell.fill = { type: 'pattern', pattern: 'solid',
+            fgColor: { argb: isBad ? 'FFFFCDD2' : 'FFC8E6C9' } };
           deltaCell.font = { color: { argb: isBad ? 'FFD32F2F' : 'FF388E3C' }, bold: true };
+        } else {
+          deltaCell.alignment = { vertical: 'middle', horizontal: 'center' };
         }
+      }
+
+      // Bottom border for last metric in a section
+      const isLastInSection = mIdx === METRICS.length - 1 || METRICS[mIdx + 1].section !== m.section;
+      if (isLastInSection) {
+        row.eachCell(cell => {
+          cell.border = { bottom: { style: 'medium', color: { argb: 'FF888888' } } };
+        });
       }
     });
 
+    // Push last section range
+    sectionRanges.push({ name: currentSection, startRow: sectionStart, endRow: METRICS.length + 1 });
+
+    // ── Merge Section column cells ────────────────────────────
+    sectionRanges.forEach(sr => {
+      if (sr.endRow > sr.startRow) {
+        ws.mergeCells(sr.startRow, 1, sr.endRow, 1);
+      }
+      const cell = ws.getCell(sr.startRow, 1);
+      cell.value = sr.name;
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+    });
+
+    // ── Freeze top row + first 2 cols ─────────────────────────
+    ws.views = [{ state: 'frozen', xSplit: 2, ySplit: 1 }];
+
+    return wb;
+  };
+
+  const downloadExcel = async () => {
+    const wb = await buildWorkbook();
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
@@ -540,6 +591,8 @@ export default function WeeklyReportTab() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+
 
   if (loading || adsRunningLoading) {
     return <div style={{ padding: '24px', color: '#888' }}>Loading weekly data...</div>;
@@ -616,16 +669,7 @@ export default function WeeklyReportTab() {
       {/* Title & Download */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Weekly Performance - {getEntityTitle()}</h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button 
-            onClick={downloadCsv}
-            style={{
-              padding: '8px 16px', background: 'var(--surf2)', color: 'var(--txt)', border: '1px solid var(--bdr)', borderRadius: '4px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
-            }}
-          >
-            <span>📄</span> Download CSV
-          </button>
-          <button 
+        <button 
             onClick={downloadExcel}
             style={{
               padding: '8px 16px', background: 'var(--teal)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
@@ -633,7 +677,6 @@ export default function WeeklyReportTab() {
           >
             <span>📊</span> Export to Excel
           </button>
-        </div>
       </div>
 
       {/* Table Container */}

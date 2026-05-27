@@ -57,6 +57,9 @@ export default function DailyCampaignTab() {
   const [adsRunningMcats, setAdsRunningMcats] = useState<string[]>([]);
   const [adsRunningLoading, setAdsRunningLoading] = useState(true);
 
+  const [showMcatModal, setShowMcatModal] = useState(false);
+  const [mcatModalData, setMcatModalData] = useState<{ name: string, isAdRunning: boolean, bl_approved: number }[]>([]);
+
   useEffect(() => {
     setPage(0);
   }, [granularity, selectedGroup, selectedPmcat, selectedMcat, selectedWeek]);
@@ -868,7 +871,8 @@ export default function DailyCampaignTab() {
 
   const downloadCompareCsv = () => {
     let csv = `Metric,${compareWeeksList.join(',')}\n`;
-    METRICS.forEach(m => {
+    const activeMetrics = timePeriod === 'weekly' ? METRICS : METRICS.filter(m => m.key !== 'mcat_div' && m.key !== 'pmcat_div');
+    activeMetrics.forEach(m => {
       let row = `${m.label},`;
       row += compareData.map(d => formatVal(d.stats[m.key], m.key).replace(/,/g, '')).join(',');
       csv += row + '\n';
@@ -921,10 +925,8 @@ export default function DailyCampaignTab() {
         row.cost_per_bl,
         row.txn_approved_pct,
         row.bl_sold_pct,
-        row.cost_per_txn,
-        row.mcat_div,
-        row.pmcat_div,
-        row.blni,
+        // Conditionally include mcat_div and pmcat_div
+        ...((timePeriod === 'weekly') ? [row.mcat_div, row.pmcat_div] : []),
         row.blni_pct,
         row.blni_approved_pct,
         row.enq_approved,
@@ -951,10 +953,8 @@ export default function DailyCampaignTab() {
       dataToDownload.totals.cost_per_bl,
       dataToDownload.totals.txn_approved_pct,
       dataToDownload.totals.bl_sold_pct,
-      dataToDownload.totals.cost_per_txn,
-      dataToDownload.totals.mcat_div,
-      dataToDownload.totals.pmcat_div,
-      dataToDownload.totals.blni,
+      // Conditionally include totals for mcat_div and pmcat_div
+      ...((timePeriod === 'weekly') ? [dataToDownload.totals.mcat_div, dataToDownload.totals.pmcat_div] : []),
       dataToDownload.totals.blni_pct,
       dataToDownload.totals.blni_approved_pct,
       dataToDownload.totals.enq_approved,
@@ -1177,7 +1177,7 @@ export default function DailyCampaignTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {METRICS.map(m => (
+                  {METRICS.filter(m => timePeriod === 'weekly' || (m.key !== 'mcat_div' && m.key !== 'pmcat_div')).map(m => (
                     <tr key={m.key}>
                       <td style={{ fontWeight: 500 }}>{m.label}</td>
                       {compareData.map(d => (
@@ -1270,8 +1270,29 @@ export default function DailyCampaignTab() {
                   <div><div className="bn-val" style={{ color: '#29b6f6' }}>{formatVal(kpiStats.txn_approved_pct, 'txn_approved_pct')}</div><div className="bn-lbl">Txn (Appr) %</div></div>
                   <div><div className="bn-val" style={{ color: '#ffca28' }}>{formatVal(kpiStats.bl_sold_pct, 'bl_sold_pct')}</div><div className="bn-lbl">BL Sold %</div></div>
                   <div><div className="bn-val" style={{ color: '#ef5350' }}>{formatVal(kpiStats.cost_per_txn, 'cost_per_txn')}</div><div className="bn-lbl">Cost / Txn</div></div>
-                  <div><div className="bn-val" style={{ color: '#9ccc65' }}>{formatVal(kpiStats.mcat_div, 'mcat_div')}</div><div className="bn-lbl">MCAT Div.</div></div>
-                  <div><div className="bn-val" style={{ color: '#26a69a' }}>{formatVal(kpiStats.pmcat_div, 'pmcat_div')}</div><div className="bn-lbl">PMCAT Div.</div></div>
+                  {timePeriod === 'weekly' && (
+                    <>
+                      <div>
+                        <div 
+                          className="bn-val" 
+                          style={{ color: '#9ccc65', cursor: kpiStats.mcatMap ? 'pointer' : 'default', textDecoration: kpiStats.mcatMap ? 'underline' : 'none' }} 
+                          onClick={() => {
+                            if (kpiStats.mcatMap) {
+                              setMcatModalData(Array.from(kpiStats.mcatMap.entries()).map(([k, v]: any) => ({ name: k, isAdRunning: v.isAdRunning, bl_approved: v.bl_approved })));
+                              setShowMcatModal(true);
+                            }
+                          }}
+                        >
+                          {formatVal(kpiStats.mcat_div, 'mcat_div')}
+                        </div>
+                        <div className="bn-lbl">MCAT Div.</div>
+                      </div>
+                      <div>
+                        <div className="bn-val" style={{ color: '#26a69a' }}>{formatVal(kpiStats.pmcat_div, 'pmcat_div')}</div>
+                        <div className="bn-lbl">PMCAT Div.</div>
+                      </div>
+                    </>
+                  )}
                   <div><div className="bn-val" style={{ color: '#ff8a65' }}>{formatVal(kpiStats.blni, 'blni')}</div><div className="bn-lbl">BLNI</div></div>
                   <div><div className="bn-val" style={{ color: '#ff7043' }}>{formatVal(kpiStats.blni_pct, 'blni_pct')}</div><div className="bn-lbl">BLNI / Txn %</div></div>
                   <div><div className="bn-val" style={{ color: '#ff8a65' }}>{formatVal(kpiStats.blni_approved_pct, 'blni_approved_pct')}</div><div className="bn-lbl">BLNI / Appr. %</div></div>
@@ -1485,8 +1506,8 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Txn (Appr) %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BL Sold %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Cost / Txn</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>}
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>}
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Appr. %</th>
@@ -1499,7 +1520,7 @@ export default function DailyCampaignTab() {
                   <tbody>
                     {groupPerformanceData.rows.slice(page * 30, (page + 1) * 30).map((row: any) => (
                       <tr key={row.name}>
-                        <td style={{ position: 'sticky', left: 0, background: '#111', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
+                        <td style={{ position: 'sticky', left: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
                         <td className="num">{formatVal(row.impressions, 'impressions')}</td>
                         <td className="num">{formatVal(row.clicks, 'clicks')}</td>
                         <td className="num" style={{ color: C.g }}>{formatVal(row.ctr, 'ctr')}</td>
@@ -1514,8 +1535,17 @@ export default function DailyCampaignTab() {
                         <td className="num" style={{ color: '#29b6f6' }}>{formatVal(row.txn_approved_pct, 'txn_approved_pct')}</td>
                         <td className="num" style={{ color: '#ffca28' }}>{formatVal(row.bl_sold_pct, 'bl_sold_pct')}</td>
                         <td className="num" style={{ color: '#ef5350' }}>{formatVal(row.cost_per_txn, 'cost_per_txn')}</td>
-                        <td className="num">{formatVal(row.mcat_div, 'mcat_div')}</td>
-                        <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                        {timePeriod === 'weekly' && (
+                          <>
+                            <td className="num" style={{ cursor: row.mcatMap ? 'pointer' : 'default', textDecoration: row.mcatMap ? 'underline' : 'none', color: '#9ccc65' }} onClick={() => {
+                              if (row.mcatMap) {
+                                setMcatModalData(Array.from(row.mcatMap.entries()).map(([k, v]: any) => ({ name: k, isAdRunning: v.isAdRunning, bl_approved: v.bl_approved })));
+                                setShowMcatModal(true);
+                              }
+                            }}>{formatVal(row.mcat_div, 'mcat_div')}</td>
+                            <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                          </>
+                        )}
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
                         <td className="num" style={{ color: '#ff8a65' }}>{formatVal(row.blni_approved_pct, 'blni_approved_pct')}</td>
@@ -1525,31 +1555,31 @@ export default function DailyCampaignTab() {
                         <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
-                    <tr style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
-                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: '#111', zIndex: 30, fontWeight: 'bold' }}>Total</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.impressions, 'impressions')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.clicks, 'clicks')}</td>
-                      <td className="num" style={{ color: C.g, position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.ctr, 'ctr')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost, 'cost')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.conversions, 'conversions')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cpc, 'cpc')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_conversion, 'cost_per_conversion')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_approved, 'bl_approved')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_sold_approved, 'bl_sold_approved')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_txn_approved, 'bl_txn_approved')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_bl, 'cost_per_bl')}</td>
-                      <td className="num" style={{ color: '#29b6f6', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
-                      <td className="num" style={{ color: '#ffca28', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
-                      <td className="num" style={{ color: '#ef5350', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.mcat_div, 'mcat_div')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni, 'blni')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni_pct, 'blni_pct')}</td>
-                      <td className="num" style={{ color: '#ff8a65', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni_approved_pct, 'blni_approved_pct')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.enq_approved, 'enq_approved')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.calls_approved, 'calls_approved')}</td>
-                      <td className="num" style={{ color: '#ba68c8', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
+                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold' }}>Total</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.impressions, 'impressions')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.clicks, 'clicks')}</td>
+                      <td className="num" style={{ color: C.g, position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.ctr, 'ctr')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost, 'cost')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.conversions, 'conversions')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cpc, 'cpc')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_conversion, 'cost_per_conversion')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_approved, 'bl_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_sold_approved, 'bl_sold_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_txn_approved, 'bl_txn_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_bl, 'cost_per_bl')}</td>
+                      <td className="num" style={{ color: '#29b6f6', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
+                      <td className="num" style={{ color: '#ffca28', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
+                      <td className="num" style={{ color: '#ef5350', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
+                      {timePeriod === 'weekly' && <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.mcat_div, 'mcat_div')}</td>}
+                      {timePeriod === 'weekly' && <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>}
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni, 'blni')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                      <td className="num" style={{ color: '#ff8a65', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni_approved_pct, 'blni_approved_pct')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.enq_approved, 'enq_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.calls_approved, 'calls_approved')}</td>
+                      <td className="num" style={{ color: '#ba68c8', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1592,8 +1622,8 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Txn (Appr) %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BL Sold %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Cost / Txn</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>}
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>}
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
@@ -1605,7 +1635,7 @@ export default function DailyCampaignTab() {
                   <tbody>
                     {pmcatPerformanceData.rows.slice(page * 30, (page + 1) * 30).map((row: any) => (
                       <tr key={row.name}>
-                        <td style={{ position: 'sticky', left: 0, background: '#111', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
+                        <td style={{ position: 'sticky', left: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
                         <td>{row.group}</td>
                         <td className="num">{formatVal(row.impressions, 'impressions')}</td>
                         <td className="num">{formatVal(row.clicks, 'clicks')}</td>
@@ -1621,8 +1651,17 @@ export default function DailyCampaignTab() {
                         <td className="num" style={{ color: '#29b6f6' }}>{formatVal(row.txn_approved_pct, 'txn_approved_pct')}</td>
                         <td className="num" style={{ color: '#ffca28' }}>{formatVal(row.bl_sold_pct, 'bl_sold_pct')}</td>
                         <td className="num" style={{ color: '#ef5350' }}>{formatVal(row.cost_per_txn, 'cost_per_txn')}</td>
-                        <td className="num">{formatVal(row.mcat_div, 'mcat_div')}</td>
-                        <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                        {timePeriod === 'weekly' && (
+                          <>
+                            <td className="num" style={{ cursor: row.mcatMap ? 'pointer' : 'default', textDecoration: row.mcatMap ? 'underline' : 'none', color: '#9ccc65' }} onClick={() => {
+                              if (row.mcatMap) {
+                                setMcatModalData(Array.from(row.mcatMap.entries()).map(([k, v]: any) => ({ name: k, isAdRunning: v.isAdRunning, bl_approved: v.bl_approved })));
+                                setShowMcatModal(true);
+                              }
+                            }}>{formatVal(row.mcat_div, 'mcat_div')}</td>
+                            <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                          </>
+                        )}
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
                         <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
@@ -1631,8 +1670,8 @@ export default function DailyCampaignTab() {
                         <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
-                    <tr style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
-                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: '#111', zIndex: 30, fontWeight: 'bold' }}>Total</td>
+                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold' }}>Total</td>
                       <td />
                       <td className="num">{formatVal(pmcatPerformanceData.totals.impressions, 'impressions')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.clicks, 'clicks')}</td>
@@ -1648,8 +1687,8 @@ export default function DailyCampaignTab() {
                       <td className="num" style={{ color: '#29b6f6' }}>{formatVal(pmcatPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
                       <td className="num" style={{ color: '#ffca28' }}>{formatVal(pmcatPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
                       <td className="num" style={{ color: '#ef5350' }}>{formatVal(pmcatPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
-                      <td className="num">{formatVal(pmcatPerformanceData.totals.mcat_div, 'mcat_div')}</td>
-                      <td className="num">{formatVal(pmcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
+                      {timePeriod === 'weekly' && <td className="num">{formatVal(pmcatPerformanceData.totals.mcat_div, 'mcat_div')}</td>}
+                      {timePeriod === 'weekly' && <td className="num">{formatVal(pmcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>}
                       <td className="num">{formatVal(pmcatPerformanceData.totals.blni, 'blni')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.blni_pct, 'blni_pct')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.enq_approved, 'enq_approved')}</td>
@@ -1698,8 +1737,8 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Txn (Appr) %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BL Sold %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Cost / Txn</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>}
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>}
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
@@ -1711,7 +1750,7 @@ export default function DailyCampaignTab() {
                   <tbody>
                     {mcatPerformanceData.rows.slice(page * 30, (page + 1) * 30).map((row: any) => (
                       <tr key={row.name}>
-                        <td style={{ position: 'sticky', left: 0, background: '#111', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
+                        <td style={{ position: 'sticky', left: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
                         <td>{row.pmcat}</td>
                         <td className="num">{formatVal(row.impressions, 'impressions')}</td>
                         <td className="num">{formatVal(row.clicks, 'clicks')}</td>
@@ -1727,8 +1766,12 @@ export default function DailyCampaignTab() {
                         <td className="num" style={{ color: '#29b6f6' }}>{formatVal(row.txn_approved_pct, 'txn_approved_pct')}</td>
                         <td className="num" style={{ color: '#ffca28' }}>{formatVal(row.bl_sold_pct, 'bl_sold_pct')}</td>
                         <td className="num" style={{ color: '#ef5350' }}>{formatVal(row.cost_per_txn, 'cost_per_txn')}</td>
-                        <td className="num">{formatVal(row.mcat_div, 'mcat_div')}</td>
-                        <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                        {timePeriod === 'weekly' && (
+                          <>
+                            <td className="num">{formatVal(row.mcat_div, 'mcat_div')}</td>
+                            <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                          </>
+                        )}
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
                         <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
@@ -1754,8 +1797,8 @@ export default function DailyCampaignTab() {
                       <td className="num" style={{ color: '#29b6f6' }}>{formatVal(mcatPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
                       <td className="num" style={{ color: '#ffca28' }}>{formatVal(mcatPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
                       <td className="num" style={{ color: '#ef5350' }}>{formatVal(mcatPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
-                      <td className="num">{formatVal(mcatPerformanceData.totals.mcat_div, 'mcat_div')}</td>
-                      <td className="num">{formatVal(mcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
+                      {timePeriod === 'weekly' && <td className="num">{formatVal(mcatPerformanceData.totals.mcat_div, 'mcat_div')}</td>}
+                      {timePeriod === 'weekly' && <td className="num">{formatVal(mcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>}
                       <td className="num">{formatVal(mcatPerformanceData.totals.blni, 'blni')}</td>
                       <td className="num">{formatVal(mcatPerformanceData.totals.blni_pct, 'blni_pct')}</td>
                       <td className="num">{formatVal(mcatPerformanceData.totals.enq_approved, 'enq_approved')}</td>
@@ -1770,8 +1813,81 @@ export default function DailyCampaignTab() {
           )}
         </>
       )}
+
+      {/* MCAT Diversity Breakdown Modal */}
+      {showMcatModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#222', border: '1px solid var(--bdr)', borderRadius: '8px', padding: '20px', minWidth: '400px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+              <h3 style={{ margin: 0 }}>MCAT Diversity Details</h3>
+              <button onClick={() => setShowMcatModal(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '24px', lineHeight: '1' }}>&times;</button>
+            </div>
+            {(() => {
+              const adsRunningList = mcatModalData.filter(m => m.isAdRunning).sort((a,b) => b.bl_approved - a.bl_approved);
+              const blGe10List = mcatModalData.filter(m => m.bl_approved >= 10).sort((a,b) => b.bl_approved - a.bl_approved);
+              const diversity = adsRunningList.length > 0 ? ((blGe10List.length / adsRunningList.length) * 100).toFixed(1) : 0;
+              return (
+                <>
+                  <div style={{ display: 'flex', gap: '20px', marginBottom: '15px', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '14px', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}><strong>Total Ads Running MCATs:</strong> <span style={{color: '#9ccc65', marginLeft: '5px'}}>{adsRunningList.length}</span></div>
+                    <div style={{ flex: 1 }}><strong>Total MCATs (BL &ge; 10):</strong> <span style={{color: '#9ccc65', marginLeft: '5px'}}>{blGe10List.length}</span></div>
+                    <div><strong>Diversity:</strong> <span style={{color: '#29b6f6', marginLeft: '5px', fontSize: '18px', fontWeight: 'bold'}}>{diversity}%</span></div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '24px' }}>
+                    {/* Left Column */}
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid var(--bdr)', paddingBottom: '8px', color: '#ccc' }}>📋 Ads Running MCATs</h4>
+                      <table className="dt" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th>MCAT Name</th>
+                            <th className="num">BL Approved</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adsRunningList.map((item, idx) => (
+                            <tr key={idx}>
+                              <td>{item.name}</td>
+                              <td className="num">{item.bl_approved}</td>
+                            </tr>
+                          ))}
+                          {adsRunningList.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', padding: '20px' }}>None found</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Right Column */}
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid var(--bdr)', paddingBottom: '8px', color: '#ccc' }}>⭐ MCATs (BL &ge; 10)</h4>
+                      <table className="dt" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th>MCAT Name</th>
+                            <th className="num">BL Approved</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {blGe10List.map((item, idx) => (
+                            <tr key={idx}>
+                              <td>{item.name}</td>
+                              <td className="num" style={{ color: '#9ccc65', fontWeight: 'bold' }}>{item.bl_approved}</td>
+                            </tr>
+                          ))}
+                          {blGe10List.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', padding: '20px' }}>None found</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 

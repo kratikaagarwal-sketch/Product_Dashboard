@@ -21,10 +21,15 @@ const METRICS = [
   { key: 'txn_approved_pct', label: 'Txn (Appr) %' },
   { key: 'bl_sold_pct', label: 'BL Sold %' },
   { key: 'cost_per_txn', label: 'Cost / Txn' },
-  { key: 'mcat_div', label: 'MCAT Div.' },
-  { key: 'pmcat_div', label: 'PMCAT Div.' },
+  { key: 'mcat_div', label: 'MCAT Div. %' },
+  { key: 'pmcat_div', label: 'PMCAT Div. %' },
   { key: 'blni', label: 'BLNI' },
-  { key: 'blni_pct', label: 'BLNI %' }
+  { key: 'blni_pct', label: 'BLNI / Txn %' },
+  { key: 'blni_approved_pct', label: 'BLNI / Appr. %' },
+  { key: 'enq_approved', label: 'Enq Approved' },
+  { key: 'calls_approved', label: 'Calls Approved' },
+  { key: 'total_req_approved', label: 'Total Req Approved' },
+  { key: 'unq_purchaser', label: 'Unq Purchaser' }
 ];
 
 export default function DailyCampaignTab() {
@@ -48,6 +53,9 @@ export default function DailyCampaignTab() {
 
   const [rankMetric, setRankMetric] = useState<string>('ctr');
   const [page, setPage] = useState(0);
+
+  const [adsRunningMcats, setAdsRunningMcats] = useState<string[]>([]);
+  const [adsRunningLoading, setAdsRunningLoading] = useState(true);
 
   useEffect(() => {
     setPage(0);
@@ -77,7 +85,20 @@ export default function DailyCampaignTab() {
         setError(err.message);
         setLoading(false);
       });
+
+    fetch('/api/ads-running-mcats')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) setAdsRunningMcats(res.data);
+        setAdsRunningLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setAdsRunningLoading(false);
+      });
   }, [timePeriod]);
+
+  const adsRunningSet = useMemo(() => new Set(adsRunningMcats.map(m => m.toLowerCase().trim())), [adsRunningMcats]);
 
   // Enrich data for Group, PMCAT, MCAT directly from the query
   const enrichedData = useMemo(() => {
@@ -94,7 +115,10 @@ export default function DailyCampaignTab() {
         bl_sold_approved: d.bl_sold_approved || 0,
         bl_approved: d.bl_approved || 0,
         bl_txn_approved: d.bl_txn_approved || 0,
-        blni: d.blni || 0
+        blni: d.blni || 0,
+        enq_approved: d.enq_approved || 0,
+        calls_approved: d.calls_approved || 0,
+        unq_purchaser: d.unq_purchaser || 0
       };
     });
   }, [data]);
@@ -135,7 +159,7 @@ export default function DailyCampaignTab() {
 
   const calcKpisForWeek = (week: string) => {
     let filtered = baseFilteredData.filter(d => d.week_start_date === week);
-    const totals: any = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0 };
+    const totals: any = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0, enq_approved: 0, calls_approved: 0, unq_purchaser: 0, total_req_approved: 0 };
 
     filtered.forEach(d => {
       totals.clicks += d.clicks || 0;
@@ -146,6 +170,9 @@ export default function DailyCampaignTab() {
       totals.bl_approved += d.bl_approved || 0;
       totals.bl_txn_approved += d.bl_txn_approved || 0;
       totals.blni += d.blni || 0;
+      totals.enq_approved += d.enq_approved || 0;
+      totals.calls_approved += d.calls_approved || 0;
+      totals.unq_purchaser += d.unq_purchaser || 0;
     });
 
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
@@ -156,9 +183,44 @@ export default function DailyCampaignTab() {
     totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
     totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
-    const activeData = filtered.filter(d => d.impressions > 0);
-    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
-    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
+    totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
+    totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
+
+    if (timePeriod === 'weekly') {
+      const pmcatMap = new Map();
+      const mcatMap = new Map();
+      filtered.forEach(d => {
+        if (!d.mcat) return;
+        const mcatKey = d.mcat.toLowerCase().trim();
+        const isAdRunning = adsRunningSet.has(mcatKey);
+
+        if (!pmcatMap.has(d.pmcat)) pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
+        if (isAdRunning) pmcatMap.get(d.pmcat).isAdRunning = true;
+
+        if (!mcatMap.has(d.mcat)) mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
+      });
+
+      let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+      pmcatMap.forEach(v => {
+        if (v.isAdRunning) pmcat_ad_running++;
+        if (v.bl_approved >= 25) pmcat_ge_25++;
+      });
+
+      let mcat_ad_running = 0; let mcat_ge_10 = 0;
+      mcatMap.forEach(v => {
+        if (v.isAdRunning) mcat_ad_running++;
+        if (v.bl_approved >= 10) mcat_ge_10++;
+      });
+
+      totals.mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+      totals.pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+    } else {
+      totals.mcat_div = null;
+      totals.pmcat_div = null;
+    }
+    
     return totals;
   };
 
@@ -192,8 +254,11 @@ export default function DailyCampaignTab() {
           bl_approved: 0,
           bl_txn_approved: 0,
           blni: 0,
-          mcatSet: new Set(),
-          pmcatSet: new Set()
+          enq_approved: 0,
+          calls_approved: 0,
+          unq_purchaser: 0,
+          mcatMap: new Map(),
+          pmcatMap: new Map()
         });
       }
       const existing = rolledUp.get(key);
@@ -205,31 +270,65 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
-      if (d.mcat) existing.mcatSet.add(d.mcat);
-      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
+      existing.enq_approved += d.enq_approved || 0;
+      existing.calls_approved += d.calls_approved || 0;
+      existing.unq_purchaser += d.unq_purchaser || 0;
+      
+      if (d.mcat) {
+        const isAdRunning = adsRunningSet.has(d.mcat.toLowerCase().trim());
+        if (!existing.mcatMap.has(d.mcat)) existing.mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        existing.mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
+
+        if (!existing.pmcatMap.has(d.pmcat)) existing.pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        existing.pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
+        if (isAdRunning) existing.pmcatMap.get(d.pmcat).isAdRunning = true;
+      }
     });
 
-    const rows = Array.from(rolledUp.values()).map(d => ({
-      ...d,
-      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
-      txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
-      bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
-      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
-      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
-      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
-      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
-      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
-      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
-    })).map(r => {
-      // remove internal sets from final row
-      const { mcatSet, pmcatSet, ...out } = r as any;
+    const rows = Array.from(rolledUp.values()).map(d => {
+      let mcat_div = null;
+      let pmcat_div = null;
+
+      if (timePeriod === 'weekly') {
+        let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+        d.pmcatMap.forEach((v: any) => {
+          if (v.isAdRunning) pmcat_ad_running++;
+          if (v.bl_approved >= 25) pmcat_ge_25++;
+        });
+        pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+
+        let mcat_ad_running = 0; let mcat_ge_10 = 0;
+        d.mcatMap.forEach((v: any) => {
+          if (v.isAdRunning) mcat_ad_running++;
+          if (v.bl_approved >= 10) mcat_ge_10++;
+        });
+        mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+      }
+
+      return {
+        ...d,
+        ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+        txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
+        bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
+        cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+        cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+        cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+        cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+        blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+        blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
+        total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved,
+        mcat_div,
+        pmcat_div
+      };
+    }).map(r => {
+      // remove internal maps from final row
+      const { mcatMap, pmcatMap, ...out } = r as any;
       return out;
     });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
-    const totals = {
+    const totals: any = {
       name: 'Total',
       clicks: 0,
       impressions: 0,
@@ -239,6 +338,9 @@ export default function DailyCampaignTab() {
       bl_approved: 0,
       bl_txn_approved: 0,
       blni: 0,
+      enq_approved: 0,
+      calls_approved: 0,
+      unq_purchaser: 0,
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
@@ -260,6 +362,9 @@ export default function DailyCampaignTab() {
       totals.bl_approved += r.bl_approved;
       totals.bl_txn_approved += r.bl_txn_approved;
       totals.blni += r.blni;
+      totals.enq_approved += r.enq_approved;
+      totals.calls_approved += r.calls_approved;
+      totals.unq_purchaser += r.unq_purchaser;
     });
 
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
@@ -270,9 +375,22 @@ export default function DailyCampaignTab() {
     totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
     totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
-    const activeData = weeklyData.filter(d => d.impressions > 0);
-    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
-    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
+    totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
+    totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
+    
+    if (timePeriod === 'weekly') {
+      let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+      let mcat_ad_running = 0; let mcat_ge_10 = 0;
+      rows.forEach(r => {
+         // for totals, we can approximate it or just re-calculate it globally for the selected group. 
+         // since totals represents the selected week, it's just kpiStats!
+      });
+      totals.mcat_div = kpiStats.mcat_div;
+      totals.pmcat_div = kpiStats.pmcat_div;
+    } else {
+      totals.mcat_div = null;
+      totals.pmcat_div = null;
+    }
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity]);
@@ -300,8 +418,11 @@ export default function DailyCampaignTab() {
           bl_approved: 0,
           bl_txn_approved: 0,
           blni: 0,
-          mcatSet: new Set(),
-          pmcatSet: new Set()
+          enq_approved: 0,
+          calls_approved: 0,
+          unq_purchaser: 0,
+          mcatMap: new Map(),
+          pmcatMap: new Map()
         });
       }
       const existing = rolledUp.get(key);
@@ -313,30 +434,63 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
-      if (d.mcat) existing.mcatSet.add(d.mcat);
-      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
+      existing.enq_approved += d.enq_approved || 0;
+      existing.calls_approved += d.calls_approved || 0;
+      existing.unq_purchaser += d.unq_purchaser || 0;
+      if (d.mcat) {
+        const isAdRunning = adsRunningSet.has(d.mcat.toLowerCase().trim());
+        if (!existing.mcatMap.has(d.mcat)) existing.mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        existing.mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
+
+        if (!existing.pmcatMap.has(d.pmcat)) existing.pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        existing.pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
+        if (isAdRunning) existing.pmcatMap.get(d.pmcat).isAdRunning = true;
+      }
     });
 
-    const rows = Array.from(rolledUp.values()).map(d => ({
-      ...d,
-      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
-      txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
-      bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
-      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
-      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
-      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
-      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
-      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
-      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
-    })).map(r => {
-      const { mcatSet, pmcatSet, ...out } = r as any;
+    const rows = Array.from(rolledUp.values()).map(d => {
+      let mcat_div = null;
+      let pmcat_div = null;
+
+      if (timePeriod === 'weekly') {
+        let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+        d.pmcatMap.forEach((v: any) => {
+          if (v.isAdRunning) pmcat_ad_running++;
+          if (v.bl_approved >= 25) pmcat_ge_25++;
+        });
+        pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+
+        let mcat_ad_running = 0; let mcat_ge_10 = 0;
+        d.mcatMap.forEach((v: any) => {
+          if (v.isAdRunning) mcat_ad_running++;
+          if (v.bl_approved >= 10) mcat_ge_10++;
+        });
+        mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+      }
+
+      return {
+        ...d,
+        ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+        txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
+        bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
+        cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+        cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+        cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+        cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+        blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+        blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
+        total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved,
+        mcat_div,
+        pmcat_div
+      };
+    }).map(r => {
+      const { mcatMap, pmcatMap, ...out } = r as any;
       return out;
     });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
-    const totals = {
+    const totals: any = {
       name: 'Total',
       clicks: 0,
       impressions: 0,
@@ -346,6 +500,9 @@ export default function DailyCampaignTab() {
       bl_approved: 0,
       bl_txn_approved: 0,
       blni: 0,
+      enq_approved: 0,
+      calls_approved: 0,
+      unq_purchaser: 0,
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
@@ -367,6 +524,9 @@ export default function DailyCampaignTab() {
       totals.bl_approved += r.bl_approved;
       totals.bl_txn_approved += r.bl_txn_approved;
       totals.blni += r.blni;
+      totals.enq_approved += r.enq_approved;
+      totals.calls_approved += r.calls_approved;
+      totals.unq_purchaser += r.unq_purchaser;
     });
 
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
@@ -377,6 +537,8 @@ export default function DailyCampaignTab() {
     totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
     totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
+    totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
+    totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
     const activeData = filteredData.filter(d => d.impressions > 0);
     totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
     totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
@@ -408,8 +570,11 @@ export default function DailyCampaignTab() {
           bl_approved: 0,
           bl_txn_approved: 0,
           blni: 0,
-          mcatSet: new Set(),
-          pmcatSet: new Set()
+          enq_approved: 0,
+          calls_approved: 0,
+          unq_purchaser: 0,
+          mcatMap: new Map(),
+          pmcatMap: new Map()
         });
       }
       const existing = rolledUp.get(key);
@@ -421,30 +586,64 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
-      if (d.mcat) existing.mcatSet.add(d.mcat);
-      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
+      existing.enq_approved += d.enq_approved || 0;
+      existing.calls_approved += d.calls_approved || 0;
+      existing.unq_purchaser += d.unq_purchaser || 0;
+      
+      if (d.mcat) {
+        const isAdRunning = adsRunningSet.has(d.mcat.toLowerCase().trim());
+        if (!existing.mcatMap.has(d.mcat)) existing.mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        existing.mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
+
+        if (!existing.pmcatMap.has(d.pmcat)) existing.pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        existing.pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
+        if (isAdRunning) existing.pmcatMap.get(d.pmcat).isAdRunning = true;
+      }
     });
 
-    const rows = Array.from(rolledUp.values()).map(d => ({
-      ...d,
-      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
-      txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
-      bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
-      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
-      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
-      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
-      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
-      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
-      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
-    })).map(r => {
-      const { mcatSet, pmcatSet, ...out } = r as any;
+    const rows = Array.from(rolledUp.values()).map(d => {
+      let mcat_div = null;
+      let pmcat_div = null;
+
+      if (timePeriod === 'weekly') {
+        let mcat_ad_running = 0; let mcat_ge_10 = 0;
+        d.mcatMap.forEach((v: any) => {
+          if (v.isAdRunning) mcat_ad_running++;
+          if (v.bl_approved >= 10) mcat_ge_10++;
+        });
+        mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+        
+        let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+        d.pmcatMap.forEach((v: any) => {
+          if (v.isAdRunning) pmcat_ad_running++;
+          if (v.bl_approved >= 25) pmcat_ge_25++;
+        });
+        pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+      }
+
+      return {
+        ...d,
+        ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+        txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
+        bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
+        cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+        cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+        cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+        cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+        blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+        blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
+        total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved,
+        mcat_div,
+        pmcat_div
+      };
+    }).map(r => {
+      const { mcatMap, pmcatMap, ...out } = r as any;
       return out;
     });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
-    const totals = {
+    const totals: any = {
       name: 'Total',
       clicks: 0,
       impressions: 0,
@@ -475,6 +674,9 @@ export default function DailyCampaignTab() {
       totals.bl_approved += r.bl_approved;
       totals.bl_txn_approved += r.bl_txn_approved;
       totals.blni += r.blni;
+      totals.enq_approved += r.enq_approved;
+      totals.calls_approved += r.calls_approved;
+      totals.unq_purchaser += r.unq_purchaser;
     });
 
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
@@ -485,9 +687,16 @@ export default function DailyCampaignTab() {
     totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
     totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
-    const activeData = filteredData.filter(d => d.impressions > 0);
-    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
-    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
+    totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
+    totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
+
+    if (timePeriod === 'weekly') {
+      totals.mcat_div = kpiStats.mcat_div;
+      totals.pmcat_div = kpiStats.pmcat_div;
+    } else {
+      totals.mcat_div = null;
+      totals.pmcat_div = null;
+    }
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity, selectedGroup, selectedPmcat, selectedMcat]);
@@ -508,7 +717,7 @@ export default function DailyCampaignTab() {
       if (granularity === 'group') key = d.group;
 
       if (!rolledUp.has(key)) {
-        rolledUp.set(key, { name: key, clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0 });
+        rolledUp.set(key, { name: key, clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, enq_approved: 0, calls_approved: 0, unq_purchaser: 0 });
       }
       const existing = rolledUp.get(key);
       existing.clicks += d.clicks || 0;
@@ -519,6 +728,9 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
+      existing.enq_approved += d.enq_approved || 0;
+      existing.calls_approved += d.calls_approved || 0;
+      existing.unq_purchaser += d.unq_purchaser || 0;
     });
 
     const rolledUpArr = Array.from(rolledUp.values()).map(d => ({
@@ -526,7 +738,10 @@ export default function DailyCampaignTab() {
       ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
       txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
       bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+      blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
+      total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved
     }));
 
     const sorted = [...rolledUpArr].sort((a, b) => b[rankMetric] - a[rankMetric]);
@@ -636,10 +851,12 @@ export default function DailyCampaignTab() {
     return `${monthNames[mIdx]} ${parseInt(parts[2], 10)}`;
   };
 
-  const formatVal = (val: number, metric: string) => {
+  const formatVal = (val: number | null, metric: string) => {
+    if (val === null || val === undefined) return 'N/A';
+    if (metric === 'mcat_div' || metric === 'pmcat_div') return `${(val || 0).toFixed(1)}%`;
     if (metric === 'cost' || metric === 'cost_per_txn' || metric === 'cost_per_conversion' || metric === 'cost_per_bl' || metric === 'cpc') return `₹${(val || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}`;
     if (metric === 'conversions') return (val || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
-    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'blni_pct') return `${(val || 0).toFixed(1)}%`;
+    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'blni_pct' || metric === 'blni_approved_pct') return `${(val || 0).toFixed(1)}%`;
     return (val || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
   };
 
@@ -679,9 +896,9 @@ export default function DailyCampaignTab() {
       filename = `mcat_performance_${timePeriod}_${selectedWeek}.csv`;
     }
 
-    let headers = ['Group Name', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
-    if (granularity === 'pmcat') headers = ['PMCAT', 'Parent Group', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
-    if (granularity === 'mcat') headers = ['MCAT', 'Parent PMCAT', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
+    let headers = ['Group Name', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
+    if (granularity === 'pmcat') headers = ['PMCAT', 'Parent Group', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
+    if (granularity === 'mcat') headers = ['MCAT', 'Parent PMCAT', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
 
     const dataToDownload = (granularity === 'group' ? groupPerformanceData : (granularity === 'pmcat' ? pmcatPerformanceData : mcatPerformanceData));
     if (!dataToDownload) return;
@@ -708,7 +925,12 @@ export default function DailyCampaignTab() {
         row.mcat_div,
         row.pmcat_div,
         row.blni,
-        row.blni_pct
+        row.blni_pct,
+        row.blni_approved_pct,
+        row.enq_approved,
+        row.calls_approved,
+        row.total_req_approved,
+        row.unq_purchaser
       ].filter(v => v !== null);
       csv += rowData.join(',') + '\n';
     });
@@ -733,7 +955,12 @@ export default function DailyCampaignTab() {
       dataToDownload.totals.mcat_div,
       dataToDownload.totals.pmcat_div,
       dataToDownload.totals.blni,
-      dataToDownload.totals.blni_pct
+      dataToDownload.totals.blni_pct,
+      dataToDownload.totals.blni_approved_pct,
+      dataToDownload.totals.enq_approved,
+      dataToDownload.totals.calls_approved,
+      dataToDownload.totals.total_req_approved,
+      dataToDownload.totals.unq_purchaser
     ].filter(v => v !== null);
     csv += totalsRow.join(',') + '\n';
 
@@ -1046,7 +1273,12 @@ export default function DailyCampaignTab() {
                   <div><div className="bn-val" style={{ color: '#9ccc65' }}>{formatVal(kpiStats.mcat_div, 'mcat_div')}</div><div className="bn-lbl">MCAT Div.</div></div>
                   <div><div className="bn-val" style={{ color: '#26a69a' }}>{formatVal(kpiStats.pmcat_div, 'pmcat_div')}</div><div className="bn-lbl">PMCAT Div.</div></div>
                   <div><div className="bn-val" style={{ color: '#ff8a65' }}>{formatVal(kpiStats.blni, 'blni')}</div><div className="bn-lbl">BLNI</div></div>
-                  <div><div className="bn-val" style={{ color: '#ff7043' }}>{formatVal(kpiStats.blni_pct, 'blni_pct')}</div><div className="bn-lbl">BLNI %</div></div>
+                  <div><div className="bn-val" style={{ color: '#ff7043' }}>{formatVal(kpiStats.blni_pct, 'blni_pct')}</div><div className="bn-lbl">BLNI / Txn %</div></div>
+                  <div><div className="bn-val" style={{ color: '#ff8a65' }}>{formatVal(kpiStats.blni_approved_pct, 'blni_approved_pct')}</div><div className="bn-lbl">BLNI / Appr. %</div></div>
+                  <div><div className="bn-val" style={{ color: '#4dd0e1' }}>{formatVal(kpiStats.enq_approved, 'enq_approved')}</div><div className="bn-lbl">Enq Approved</div></div>
+                  <div><div className="bn-val" style={{ color: '#81c784' }}>{formatVal(kpiStats.calls_approved, 'calls_approved')}</div><div className="bn-lbl">Calls Approved</div></div>
+                  <div><div className="bn-val" style={{ color: '#ba68c8' }}>{formatVal(kpiStats.total_req_approved, 'total_req_approved')}</div><div className="bn-lbl">Total Req Appr.</div></div>
+                  <div><div className="bn-val" style={{ color: '#a1887f' }}>{formatVal(kpiStats.unq_purchaser, 'unq_purchaser')}</div><div className="bn-lbl">Unq Purchaser</div></div>
                 </div>
               </div>
             </div>
@@ -1256,13 +1488,18 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Appr. %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {groupPerformanceData.rows.slice(page * 30, (page + 1) * 30).map((row: any) => (
                       <tr key={row.name}>
-                        <td style={{ position: 'sticky', left: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
+                        <td style={{ position: 'sticky', left: 0, background: '#111', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
                         <td className="num">{formatVal(row.impressions, 'impressions')}</td>
                         <td className="num">{formatVal(row.clicks, 'clicks')}</td>
                         <td className="num" style={{ color: C.g }}>{formatVal(row.ctr, 'ctr')}</td>
@@ -1281,28 +1518,38 @@ export default function DailyCampaignTab() {
                         <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
+                        <td className="num" style={{ color: '#ff8a65' }}>{formatVal(row.blni_approved_pct, 'blni_approved_pct')}</td>
+                        <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
+                        <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
+                        <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
+                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
-                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
-                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg3)', zIndex: 11, fontWeight: 'bold' }}>Total</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.impressions, 'impressions')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.clicks, 'clicks')}</td>
-                      <td className="num" style={{ color: C.g }}>{formatVal(groupPerformanceData.totals.ctr, 'ctr')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.cost, 'cost')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.conversions, 'conversions')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.cpc, 'cpc')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.cost_per_conversion, 'cost_per_conversion')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.bl_approved, 'bl_approved')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.bl_sold_approved, 'bl_sold_approved')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.bl_txn_approved, 'bl_txn_approved')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.cost_per_bl, 'cost_per_bl')}</td>
-                      <td className="num" style={{ color: '#29b6f6' }}>{formatVal(groupPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
-                      <td className="num" style={{ color: '#ffca28' }}>{formatVal(groupPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
-                      <td className="num" style={{ color: '#ef5350' }}>{formatVal(groupPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.mcat_div, 'mcat_div')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.blni, 'blni')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                    <tr style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: '#111', zIndex: 30, fontWeight: 'bold' }}>Total</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.impressions, 'impressions')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.clicks, 'clicks')}</td>
+                      <td className="num" style={{ color: C.g, position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.ctr, 'ctr')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost, 'cost')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.conversions, 'conversions')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cpc, 'cpc')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_conversion, 'cost_per_conversion')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_approved, 'bl_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_sold_approved, 'bl_sold_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_txn_approved, 'bl_txn_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_bl, 'cost_per_bl')}</td>
+                      <td className="num" style={{ color: '#29b6f6', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
+                      <td className="num" style={{ color: '#ffca28', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
+                      <td className="num" style={{ color: '#ef5350', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.mcat_div, 'mcat_div')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni, 'blni')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                      <td className="num" style={{ color: '#ff8a65', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.blni_approved_pct, 'blni_approved_pct')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.enq_approved, 'enq_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.calls_approved, 'calls_approved')}</td>
+                      <td className="num" style={{ color: '#ba68c8', position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30 }}>{formatVal(groupPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1348,13 +1595,17 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pmcatPerformanceData.rows.slice(page * 30, (page + 1) * 30).map((row: any) => (
                       <tr key={row.name}>
-                        <td style={{ position: 'sticky', left: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
+                        <td style={{ position: 'sticky', left: 0, background: '#111', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
                         <td>{row.group}</td>
                         <td className="num">{formatVal(row.impressions, 'impressions')}</td>
                         <td className="num">{formatVal(row.clicks, 'clicks')}</td>
@@ -1374,10 +1625,14 @@ export default function DailyCampaignTab() {
                         <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
+                        <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
+                        <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
+                        <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
+                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
-                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
-                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold' }}>Total</td>
+                    <tr style={{ position: 'sticky', bottom: 0, background: '#111', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: '#111', zIndex: 30, fontWeight: 'bold' }}>Total</td>
                       <td />
                       <td className="num">{formatVal(pmcatPerformanceData.totals.impressions, 'impressions')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.clicks, 'clicks')}</td>
@@ -1397,6 +1652,10 @@ export default function DailyCampaignTab() {
                       <td className="num">{formatVal(pmcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.blni, 'blni')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                      <td className="num">{formatVal(pmcatPerformanceData.totals.enq_approved, 'enq_approved')}</td>
+                      <td className="num">{formatVal(pmcatPerformanceData.totals.calls_approved, 'calls_approved')}</td>
+                      <td className="num" style={{ color: '#ba68c8' }}>{formatVal(pmcatPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
+                      <td className="num">{formatVal(pmcatPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1442,13 +1701,17 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {mcatPerformanceData.rows.slice(page * 30, (page + 1) * 30).map((row: any) => (
                       <tr key={row.name}>
-                        <td style={{ position: 'sticky', left: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
+                        <td style={{ position: 'sticky', left: 0, background: '#111', zIndex: 30, fontWeight: 500 }}>{row.name}</td>
                         <td>{row.pmcat}</td>
                         <td className="num">{formatVal(row.impressions, 'impressions')}</td>
                         <td className="num">{formatVal(row.clicks, 'clicks')}</td>
@@ -1468,6 +1731,10 @@ export default function DailyCampaignTab() {
                         <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
+                        <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
+                        <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
+                        <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
+                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
                     <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
@@ -1491,6 +1758,10 @@ export default function DailyCampaignTab() {
                       <td className="num">{formatVal(mcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
                       <td className="num">{formatVal(mcatPerformanceData.totals.blni, 'blni')}</td>
                       <td className="num">{formatVal(mcatPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                      <td className="num">{formatVal(mcatPerformanceData.totals.enq_approved, 'enq_approved')}</td>
+                      <td className="num">{formatVal(mcatPerformanceData.totals.calls_approved, 'calls_approved')}</td>
+                      <td className="num" style={{ color: '#ba68c8' }}>{formatVal(mcatPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
+                      <td className="num">{formatVal(mcatPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>

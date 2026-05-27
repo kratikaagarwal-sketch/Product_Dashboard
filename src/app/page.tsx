@@ -12,6 +12,7 @@ import AiInsightsTab from "@/components/tabs/AiInsightsTab";
 import BlTab from "@/components/tabs/BlTab";
 import TrafficEnquiryTab from "@/components/tabs/TrafficEnquiryTab";
 import DailyCampaignTab from "@/components/tabs/DailyCampaignTab";
+import WeeklyReportTab from "@/components/tabs/WeeklyReportTab";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -31,11 +32,12 @@ export default function Home() {
           {activeTab === "hygiene" && <HygieneTab />}
           {activeTab === "mcat" && <McatPauseTab />}
           {activeTab === "daily_campaign" && <DailyCampaignTab />}
+          {activeTab === "weekly_report" && <WeeklyReportTab />}
           {activeTab === "diversity" && <CategoryDiversityTab />}
           {activeTab === "ai" && <AiInsightsTab />}
           
           {/* Default view for unimplemented tabs */}
-          {!["overview", "google", "bl", "traffic_enquiry", "hygiene", "mcat", "daily_campaign", "diversity", "ai"].includes(activeTab) && (
+          {!["overview", "google", "bl", "traffic_enquiry", "hygiene", "mcat", "daily_campaign", "weekly_report", "diversity", "ai"].includes(activeTab) && (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted)' }}>
               <div style={{ fontSize: '30px', marginBottom: '10px' }}>🚧</div>
               <h3>Module under construction</h3>

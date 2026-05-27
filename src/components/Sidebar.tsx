@@ -11,6 +11,7 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const navItems = [
     { id: 'daily_campaign', icon: '📆', label: 'Campaign Detail' },
+    { id: 'weekly_report', icon: '📅', label: 'Weekly Report' },
     { id: 'ai', icon: '✨', label: 'AI Insights' },
   ];
 

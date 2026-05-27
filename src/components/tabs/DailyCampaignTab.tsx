@@ -21,10 +21,15 @@ const METRICS = [
   { key: 'txn_approved_pct', label: 'Txn (Appr) %' },
   { key: 'bl_sold_pct', label: 'BL Sold %' },
   { key: 'cost_per_txn', label: 'Cost / Txn' },
-  { key: 'mcat_div', label: 'MCAT Div.' },
-  { key: 'pmcat_div', label: 'PMCAT Div.' },
+  { key: 'mcat_div', label: 'MCAT Div. %' },
+  { key: 'pmcat_div', label: 'PMCAT Div. %' },
   { key: 'blni', label: 'BLNI' },
-  { key: 'blni_pct', label: 'BLNI %' }
+  { key: 'blni_pct', label: 'BLNI / Txn %' },
+  { key: 'blni_approved_pct', label: 'BLNI / Appr. %' },
+  { key: 'enq_approved', label: 'Enq Approved' },
+  { key: 'calls_approved', label: 'Calls Approved' },
+  { key: 'total_req_approved', label: 'Total Req Approved' },
+  { key: 'unq_purchaser', label: 'Unq Purchaser' }
 ];
 
 export default function DailyCampaignTab() {
@@ -48,6 +53,15 @@ export default function DailyCampaignTab() {
 
   const [rankMetric, setRankMetric] = useState<string>('ctr');
   const [page, setPage] = useState(0);
+
+  const [adsRunningMcats, setAdsRunningMcats] = useState<string[]>([]);
+  const [adsRunningLoading, setAdsRunningLoading] = useState(true);
+
+  const [showMcatModal, setShowMcatModal] = useState(false);
+  const [mcatModalData, setMcatModalData] = useState<any[]>([]);
+
+  const [showPmcatModal, setShowPmcatModal] = useState(false);
+  const [pmcatModalData, setPmcatModalData] = useState<any[]>([]);
 
   useEffect(() => {
     setPage(0);
@@ -77,7 +91,20 @@ export default function DailyCampaignTab() {
         setError(err.message);
         setLoading(false);
       });
+
+    fetch('/api/ads-running-mcats')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) setAdsRunningMcats(res.data);
+        setAdsRunningLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setAdsRunningLoading(false);
+      });
   }, [timePeriod]);
+
+  const adsRunningSet = useMemo(() => new Set(adsRunningMcats.map(m => m.toLowerCase().trim())), [adsRunningMcats]);
 
   // Enrich data for Group, PMCAT, MCAT directly from the query
   const enrichedData = useMemo(() => {
@@ -94,7 +121,10 @@ export default function DailyCampaignTab() {
         bl_sold_approved: d.bl_sold_approved || 0,
         bl_approved: d.bl_approved || 0,
         bl_txn_approved: d.bl_txn_approved || 0,
-        blni: d.blni || 0
+        blni: d.blni || 0,
+        enq_approved: d.enq_approved || 0,
+        calls_approved: d.calls_approved || 0,
+        unq_purchaser: d.unq_purchaser || 0
       };
     });
   }, [data]);
@@ -135,7 +165,7 @@ export default function DailyCampaignTab() {
 
   const calcKpisForWeek = (week: string) => {
     let filtered = baseFilteredData.filter(d => d.week_start_date === week);
-    const totals: any = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0 };
+    const totals: any = { clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, txn_approved_pct: 0, bl_sold_pct: 0, cost_per_txn: 0, enq_approved: 0, calls_approved: 0, unq_purchaser: 0, total_req_approved: 0 };
 
     filtered.forEach(d => {
       totals.clicks += d.clicks || 0;
@@ -146,6 +176,9 @@ export default function DailyCampaignTab() {
       totals.bl_approved += d.bl_approved || 0;
       totals.bl_txn_approved += d.bl_txn_approved || 0;
       totals.blni += d.blni || 0;
+      totals.enq_approved += d.enq_approved || 0;
+      totals.calls_approved += d.calls_approved || 0;
+      totals.unq_purchaser += d.unq_purchaser || 0;
     });
 
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
@@ -156,9 +189,46 @@ export default function DailyCampaignTab() {
     totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
     totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
-    const activeData = filtered.filter(d => d.impressions > 0);
-    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
-    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
+    totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
+    totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
+
+    if (timePeriod === 'weekly') {
+      const pmcatMap = new Map();
+      const mcatMap = new Map();
+      filtered.forEach(d => {
+        if (!d.mcat) return;
+        const mcatKey = d.mcat.toLowerCase().trim();
+        const isAdRunning = adsRunningSet.has(mcatKey);
+
+        if (!pmcatMap.has(d.pmcat)) pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
+        if (isAdRunning) pmcatMap.get(d.pmcat).isAdRunning = true;
+
+        if (!mcatMap.has(d.mcat)) mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
+      });
+
+      let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+      pmcatMap.forEach(v => {
+        if (v.isAdRunning) pmcat_ad_running++;
+        if (v.bl_approved >= 25) pmcat_ge_25++;
+      });
+
+      let mcat_ad_running = 0; let mcat_ge_10 = 0;
+      mcatMap.forEach(v => {
+        if (v.isAdRunning) mcat_ad_running++;
+        if (v.bl_approved >= 10) mcat_ge_10++;
+      });
+
+      totals.mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+      totals.pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+      totals.mcatMap = mcatMap;
+      totals.pmcatMap = pmcatMap;
+    } else {
+      totals.mcat_div = null;
+      totals.pmcat_div = null;
+    }
+    
     return totals;
   };
 
@@ -192,8 +262,11 @@ export default function DailyCampaignTab() {
           bl_approved: 0,
           bl_txn_approved: 0,
           blni: 0,
-          mcatSet: new Set(),
-          pmcatSet: new Set()
+          enq_approved: 0,
+          calls_approved: 0,
+          unq_purchaser: 0,
+          mcatMap: new Map(),
+          pmcatMap: new Map()
         });
       }
       const existing = rolledUp.get(key);
@@ -205,31 +278,65 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
-      if (d.mcat) existing.mcatSet.add(d.mcat);
-      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
+      existing.enq_approved += d.enq_approved || 0;
+      existing.calls_approved += d.calls_approved || 0;
+      existing.unq_purchaser += d.unq_purchaser || 0;
+      
+      if (d.mcat) {
+        const isAdRunning = adsRunningSet.has(d.mcat.toLowerCase().trim());
+        if (!existing.mcatMap.has(d.mcat)) existing.mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        existing.mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
+
+        if (!existing.pmcatMap.has(d.pmcat)) existing.pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        existing.pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
+        if (isAdRunning) existing.pmcatMap.get(d.pmcat).isAdRunning = true;
+      }
     });
 
-    const rows = Array.from(rolledUp.values()).map(d => ({
-      ...d,
-      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
-      txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
-      bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
-      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
-      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
-      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
-      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
-      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
-      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
-    })).map(r => {
-      // remove internal sets from final row
-      const { mcatSet, pmcatSet, ...out } = r as any;
+    const rows = Array.from(rolledUp.values()).map(d => {
+      let mcat_div = null;
+      let pmcat_div = null;
+
+      if (timePeriod === 'weekly') {
+        let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+        d.pmcatMap.forEach((v: any) => {
+          if (v.isAdRunning) pmcat_ad_running++;
+          if (v.bl_approved >= 25) pmcat_ge_25++;
+        });
+        pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+
+        let mcat_ad_running = 0; let mcat_ge_10 = 0;
+        d.mcatMap.forEach((v: any) => {
+          if (v.isAdRunning) mcat_ad_running++;
+          if (v.bl_approved >= 10) mcat_ge_10++;
+        });
+        mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+      }
+
+      return {
+        ...d,
+        ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+        txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
+        bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
+        cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+        cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+        cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+        cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+        blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+        blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
+        total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved,
+        mcat_div,
+        pmcat_div
+      };
+    }).map(r => {
+      // remove internal maps from final row
+      const { mcatMap, pmcatMap, ...out } = r as any;
       return out;
     });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
-    const totals = {
+    const totals: any = {
       name: 'Total',
       clicks: 0,
       impressions: 0,
@@ -239,6 +346,9 @@ export default function DailyCampaignTab() {
       bl_approved: 0,
       bl_txn_approved: 0,
       blni: 0,
+      enq_approved: 0,
+      calls_approved: 0,
+      unq_purchaser: 0,
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
@@ -260,6 +370,9 @@ export default function DailyCampaignTab() {
       totals.bl_approved += r.bl_approved;
       totals.bl_txn_approved += r.bl_txn_approved;
       totals.blni += r.blni;
+      totals.enq_approved += r.enq_approved;
+      totals.calls_approved += r.calls_approved;
+      totals.unq_purchaser += r.unq_purchaser;
     });
 
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
@@ -270,9 +383,22 @@ export default function DailyCampaignTab() {
     totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
     totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
-    const activeData = weeklyData.filter(d => d.impressions > 0);
-    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
-    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
+    totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
+    totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
+    
+    if (timePeriod === 'weekly') {
+      let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+      let mcat_ad_running = 0; let mcat_ge_10 = 0;
+      rows.forEach(r => {
+         // for totals, we can approximate it or just re-calculate it globally for the selected group. 
+         // since totals represents the selected week, it's just kpiStats!
+      });
+      totals.mcat_div = kpiStats.mcat_div;
+      totals.pmcat_div = kpiStats.pmcat_div;
+    } else {
+      totals.mcat_div = null;
+      totals.pmcat_div = null;
+    }
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity]);
@@ -300,8 +426,11 @@ export default function DailyCampaignTab() {
           bl_approved: 0,
           bl_txn_approved: 0,
           blni: 0,
-          mcatSet: new Set(),
-          pmcatSet: new Set()
+          enq_approved: 0,
+          calls_approved: 0,
+          unq_purchaser: 0,
+          mcatMap: new Map(),
+          pmcatMap: new Map()
         });
       }
       const existing = rolledUp.get(key);
@@ -313,30 +442,63 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
-      if (d.mcat) existing.mcatSet.add(d.mcat);
-      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
+      existing.enq_approved += d.enq_approved || 0;
+      existing.calls_approved += d.calls_approved || 0;
+      existing.unq_purchaser += d.unq_purchaser || 0;
+      if (d.mcat) {
+        const isAdRunning = adsRunningSet.has(d.mcat.toLowerCase().trim());
+        if (!existing.mcatMap.has(d.mcat)) existing.mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        existing.mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
+
+        if (!existing.pmcatMap.has(d.pmcat)) existing.pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        existing.pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
+        if (isAdRunning) existing.pmcatMap.get(d.pmcat).isAdRunning = true;
+      }
     });
 
-    const rows = Array.from(rolledUp.values()).map(d => ({
-      ...d,
-      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
-      txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
-      bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
-      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
-      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
-      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
-      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
-      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
-      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
-    })).map(r => {
-      const { mcatSet, pmcatSet, ...out } = r as any;
+    const rows = Array.from(rolledUp.values()).map(d => {
+      let mcat_div = null;
+      let pmcat_div = null;
+
+      if (timePeriod === 'weekly') {
+        let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+        d.pmcatMap.forEach((v: any) => {
+          if (v.isAdRunning) pmcat_ad_running++;
+          if (v.bl_approved >= 25) pmcat_ge_25++;
+        });
+        pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+
+        let mcat_ad_running = 0; let mcat_ge_10 = 0;
+        d.mcatMap.forEach((v: any) => {
+          if (v.isAdRunning) mcat_ad_running++;
+          if (v.bl_approved >= 10) mcat_ge_10++;
+        });
+        mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+      }
+
+      return {
+        ...d,
+        ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+        txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
+        bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
+        cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+        cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+        cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+        cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+        blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+        blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
+        total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved,
+        mcat_div,
+        pmcat_div
+      };
+    }).map(r => {
+      const { mcatMap, pmcatMap, ...out } = r as any;
       return out;
     });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
-    const totals = {
+    const totals: any = {
       name: 'Total',
       clicks: 0,
       impressions: 0,
@@ -346,6 +508,9 @@ export default function DailyCampaignTab() {
       bl_approved: 0,
       bl_txn_approved: 0,
       blni: 0,
+      enq_approved: 0,
+      calls_approved: 0,
+      unq_purchaser: 0,
       ctr: 0,
       txn_approved_pct: 0,
       bl_sold_pct: 0,
@@ -367,6 +532,9 @@ export default function DailyCampaignTab() {
       totals.bl_approved += r.bl_approved;
       totals.bl_txn_approved += r.bl_txn_approved;
       totals.blni += r.blni;
+      totals.enq_approved += r.enq_approved;
+      totals.calls_approved += r.calls_approved;
+      totals.unq_purchaser += r.unq_purchaser;
     });
 
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
@@ -377,6 +545,8 @@ export default function DailyCampaignTab() {
     totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
     totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
+    totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
+    totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
     const activeData = filteredData.filter(d => d.impressions > 0);
     totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
     totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
@@ -408,8 +578,11 @@ export default function DailyCampaignTab() {
           bl_approved: 0,
           bl_txn_approved: 0,
           blni: 0,
-          mcatSet: new Set(),
-          pmcatSet: new Set()
+          enq_approved: 0,
+          calls_approved: 0,
+          unq_purchaser: 0,
+          mcatMap: new Map(),
+          pmcatMap: new Map()
         });
       }
       const existing = rolledUp.get(key);
@@ -421,30 +594,64 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
-      if (d.mcat) existing.mcatSet.add(d.mcat);
-      if (d.pmcat) existing.pmcatSet.add(d.pmcat);
+      existing.enq_approved += d.enq_approved || 0;
+      existing.calls_approved += d.calls_approved || 0;
+      existing.unq_purchaser += d.unq_purchaser || 0;
+      
+      if (d.mcat) {
+        const isAdRunning = adsRunningSet.has(d.mcat.toLowerCase().trim());
+        if (!existing.mcatMap.has(d.mcat)) existing.mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        existing.mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
+
+        if (!existing.pmcatMap.has(d.pmcat)) existing.pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        existing.pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
+        if (isAdRunning) existing.pmcatMap.get(d.pmcat).isAdRunning = true;
+      }
     });
 
-    const rows = Array.from(rolledUp.values()).map(d => ({
-      ...d,
-      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
-      txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
-      bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
-      cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
-      cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
-      cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
-      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
-      mcat_div: d.mcatSet ? d.mcatSet.size : 0,
-      pmcat_div: d.pmcatSet ? d.pmcatSet.size : 0
-    })).map(r => {
-      const { mcatSet, pmcatSet, ...out } = r as any;
+    const rows = Array.from(rolledUp.values()).map(d => {
+      let mcat_div = null;
+      let pmcat_div = null;
+
+      if (timePeriod === 'weekly') {
+        let mcat_ad_running = 0; let mcat_ge_10 = 0;
+        d.mcatMap.forEach((v: any) => {
+          if (v.isAdRunning) mcat_ad_running++;
+          if (v.bl_approved >= 10) mcat_ge_10++;
+        });
+        mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+        
+        let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
+        d.pmcatMap.forEach((v: any) => {
+          if (v.isAdRunning) pmcat_ad_running++;
+          if (v.bl_approved >= 25) pmcat_ge_25++;
+        });
+        pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+      }
+
+      return {
+        ...d,
+        ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+        txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
+        bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
+        cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+        cpc: d.clicks > 0 ? d.cost / d.clicks : 0,
+        cost_per_conversion: d.conversions > 0 ? d.cost / d.conversions : 0,
+        cost_per_bl: d.bl_approved > 0 ? d.cost / d.bl_approved : 0,
+        blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+        blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
+        total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved,
+        mcat_div,
+        pmcat_div
+      };
+    }).map(r => {
+      const { mcatMap, pmcatMap, ...out } = r as any;
       return out;
     });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
 
-    const totals = {
+    const totals: any = {
       name: 'Total',
       clicks: 0,
       impressions: 0,
@@ -475,6 +682,9 @@ export default function DailyCampaignTab() {
       totals.bl_approved += r.bl_approved;
       totals.bl_txn_approved += r.bl_txn_approved;
       totals.blni += r.blni;
+      totals.enq_approved += r.enq_approved;
+      totals.calls_approved += r.calls_approved;
+      totals.unq_purchaser += r.unq_purchaser;
     });
 
     totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
@@ -485,9 +695,16 @@ export default function DailyCampaignTab() {
     totals.cost_per_conversion = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
     totals.cost_per_bl = totals.bl_approved > 0 ? totals.cost / totals.bl_approved : 0;
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
-    const activeData = filteredData.filter(d => d.impressions > 0);
-    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
-    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
+    totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
+    totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
+
+    if (timePeriod === 'weekly') {
+      totals.mcat_div = kpiStats.mcat_div;
+      totals.pmcat_div = kpiStats.pmcat_div;
+    } else {
+      totals.mcat_div = null;
+      totals.pmcat_div = null;
+    }
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity, selectedGroup, selectedPmcat, selectedMcat]);
@@ -508,7 +725,7 @@ export default function DailyCampaignTab() {
       if (granularity === 'group') key = d.group;
 
       if (!rolledUp.has(key)) {
-        rolledUp.set(key, { name: key, clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0 });
+        rolledUp.set(key, { name: key, clicks: 0, impressions: 0, cost: 0, conversions: 0, ctr: 0, bl_sold_approved: 0, bl_approved: 0, bl_txn_approved: 0, blni: 0, enq_approved: 0, calls_approved: 0, unq_purchaser: 0 });
       }
       const existing = rolledUp.get(key);
       existing.clicks += d.clicks || 0;
@@ -519,6 +736,9 @@ export default function DailyCampaignTab() {
       existing.bl_approved += d.bl_approved || 0;
       existing.bl_txn_approved += d.bl_txn_approved || 0;
       existing.blni += d.blni || 0;
+      existing.enq_approved += d.enq_approved || 0;
+      existing.calls_approved += d.calls_approved || 0;
+      existing.unq_purchaser += d.unq_purchaser || 0;
     });
 
     const rolledUpArr = Array.from(rolledUp.values()).map(d => ({
@@ -526,7 +746,10 @@ export default function DailyCampaignTab() {
       ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
       txn_approved_pct: d.bl_approved > 0 ? (d.bl_txn_approved / d.bl_approved) * 100 : 0,
       bl_sold_pct: d.bl_approved > 0 ? (d.bl_sold_approved / d.bl_approved) * 100 : 0,
-      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0
+      cost_per_txn: d.bl_txn_approved > 0 ? d.cost / d.bl_txn_approved : 0,
+      blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
+      blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
+      total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved
     }));
 
     const sorted = [...rolledUpArr].sort((a, b) => b[rankMetric] - a[rankMetric]);
@@ -636,10 +859,12 @@ export default function DailyCampaignTab() {
     return `${monthNames[mIdx]} ${parseInt(parts[2], 10)}`;
   };
 
-  const formatVal = (val: number, metric: string) => {
+  const formatVal = (val: number | null, metric: string) => {
+    if (val === null || val === undefined) return 'N/A';
+    if (metric === 'mcat_div' || metric === 'pmcat_div') return `${(val || 0).toFixed(1)}%`;
     if (metric === 'cost' || metric === 'cost_per_txn' || metric === 'cost_per_conversion' || metric === 'cost_per_bl' || metric === 'cpc') return `₹${(val || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}`;
     if (metric === 'conversions') return (val || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
-    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'blni_pct') return `${(val || 0).toFixed(1)}%`;
+    if (metric === 'ctr' || metric === 'txn_approved_pct' || metric === 'bl_sold_pct' || metric === 'blni_pct' || metric === 'blni_approved_pct') return `${(val || 0).toFixed(1)}%`;
     return (val || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
   };
 
@@ -651,7 +876,8 @@ export default function DailyCampaignTab() {
 
   const downloadCompareCsv = () => {
     let csv = `Metric,${compareWeeksList.join(',')}\n`;
-    METRICS.forEach(m => {
+    const activeMetrics = timePeriod === 'weekly' ? METRICS : METRICS.filter(m => m.key !== 'mcat_div' && m.key !== 'pmcat_div');
+    activeMetrics.forEach(m => {
       let row = `${m.label},`;
       row += compareData.map(d => formatVal(d.stats[m.key], m.key).replace(/,/g, '')).join(',');
       csv += row + '\n';
@@ -678,10 +904,10 @@ export default function DailyCampaignTab() {
     } else if (granularity === 'mcat' && mcatPerformanceData) {
       filename = `mcat_performance_${timePeriod}_${selectedWeek}.csv`;
     }
-    
-    let headers = ['Group Name', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
-    if (granularity === 'pmcat') headers = ['PMCAT', 'Parent Group', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
-    if (granularity === 'mcat') headers = ['MCAT', 'Parent PMCAT', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI %'];
+
+    let headers = ['Group Name', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
+    if (granularity === 'pmcat') headers = ['PMCAT', 'Parent Group', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
+    if (granularity === 'mcat') headers = ['MCAT', 'Parent PMCAT', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
 
     const dataToDownload = (granularity === 'group' ? groupPerformanceData : (granularity === 'pmcat' ? pmcatPerformanceData : mcatPerformanceData));
     if (!dataToDownload) return;
@@ -704,11 +930,14 @@ export default function DailyCampaignTab() {
         row.cost_per_bl,
         row.txn_approved_pct,
         row.bl_sold_pct,
-        row.cost_per_txn,
-        row.mcat_div,
-        row.pmcat_div,
-        row.blni,
-        row.blni_pct
+        // Conditionally include mcat_div and pmcat_div
+        ...((timePeriod === 'weekly') ? [row.mcat_div, row.pmcat_div] : []),
+        row.blni_pct,
+        row.blni_approved_pct,
+        row.enq_approved,
+        row.calls_approved,
+        row.total_req_approved,
+        row.unq_purchaser
       ].filter(v => v !== null);
       csv += rowData.join(',') + '\n';
     });
@@ -729,11 +958,14 @@ export default function DailyCampaignTab() {
       dataToDownload.totals.cost_per_bl,
       dataToDownload.totals.txn_approved_pct,
       dataToDownload.totals.bl_sold_pct,
-      dataToDownload.totals.cost_per_txn,
-      dataToDownload.totals.mcat_div,
-      dataToDownload.totals.pmcat_div,
-      dataToDownload.totals.blni,
-      dataToDownload.totals.blni_pct
+      // Conditionally include totals for mcat_div and pmcat_div
+      ...((timePeriod === 'weekly') ? [dataToDownload.totals.mcat_div, dataToDownload.totals.pmcat_div] : []),
+      dataToDownload.totals.blni_pct,
+      dataToDownload.totals.blni_approved_pct,
+      dataToDownload.totals.enq_approved,
+      dataToDownload.totals.calls_approved,
+      dataToDownload.totals.total_req_approved,
+      dataToDownload.totals.unq_purchaser
     ].filter(v => v !== null);
     csv += totalsRow.join(',') + '\n';
 
@@ -825,7 +1057,7 @@ export default function DailyCampaignTab() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', padding: '10px', background: 'var(--bg2)', borderRadius: '8px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '5px' }}>Group Filter</label>
-            <SearchableSelect 
+            <SearchableSelect
               value={selectedGroup}
               onChange={(val) => { setSelectedGroup(val); resetFilters('pmcat'); }}
               options={[
@@ -839,7 +1071,7 @@ export default function DailyCampaignTab() {
           {(granularity === 'pmcat' || granularity === 'mcat') && (
             <div>
               <label style={{ display: 'block', marginBottom: '5px' }}>PMCAT Filter</label>
-              <SearchableSelect 
+              <SearchableSelect
                 value={selectedPmcat}
                 onChange={(val) => { setSelectedPmcat(val); resetFilters('mcat'); }}
                 options={[
@@ -854,7 +1086,7 @@ export default function DailyCampaignTab() {
           {granularity === 'mcat' && (
             <div>
               <label style={{ display: 'block', marginBottom: '5px' }}>MCAT Filter</label>
-              <SearchableSelect 
+              <SearchableSelect
                 value={selectedMcat}
                 onChange={(val) => setSelectedMcat(val)}
                 options={[
@@ -870,67 +1102,73 @@ export default function DailyCampaignTab() {
 
       {isCompareMode && bestKpis ? (
         <div className="compare-view">
-          {/* Best KPIs Banner */}
-          <div className="banner" style={{ marginBottom: '18px', background: 'linear-gradient(90deg, var(--surf2), var(--surf))', borderLeft: '4px solid #ab47bc' }}>
-            <div className="bn-left">
-              <div style={{ fontSize: '24px' }}>🏆</div>
-              <div>
-                <div className="bn-title" style={{ color: 'var(--txt)' }}>Best Ever KPIs</div>
-                <div className="bn-sub">Across {compareWeeksCount} {timePeriod === 'weekly' ? 'weeks' : timePeriod === 'daily' ? 'days' : 'months'} ({compareWeeksList[compareWeeksList.length - 1]} to {compareWeeksList[0]})</div>
+          {/* Top Section: Best KPIs & AI Insights Side by Side */}
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'stretch', marginBottom: '25px' }}>
+            {/* Best KPIs Banner */}
+            <div className="banner" style={{ flex: '2', margin: 0, background: 'linear-gradient(90deg, var(--surf2), var(--surf))', borderLeft: '4px solid #ab47bc' }}>
+              <div className="bn-left">
+                <div style={{ fontSize: '24px' }}>🏆</div>
+                <div>
+                  <div className="bn-title" style={{ color: 'var(--txt)' }}>Best Ever KPIs</div>
+                  <div className="bn-sub">Across {compareWeeksCount} {timePeriod === 'weekly' ? 'weeks' : timePeriod === 'daily' ? 'days' : 'months'} ({compareWeeksList[compareWeeksList.length - 1]} to {compareWeeksList[0]})</div>
+                </div>
+              </div>
+              <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                <div>
+                  <div className="bn-val" style={{ color: C.b }}>{bestKpis.impressions.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                  <div className="bn-lbl">Impressions</div>
+                  <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.impressions.week)}</div>
+                </div>
+                <div>
+                  <div className="bn-val" style={{ color: C.t }}>{bestKpis.clicks.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                  <div className="bn-lbl">Clicks</div>
+                  <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.clicks.week)}</div>
+                </div>
+                <div>
+                  <div className="bn-val" style={{ color: C.g }}>{bestKpis.ctr.val.toFixed(1)}%</div>
+                  <div className="bn-lbl">CTR</div>
+                  <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.ctr.week)}</div>
+                </div>
+                <div>
+                  <div className="bn-val" style={{ color: C.r }}>₹{bestKpis.cost.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                  <div className="bn-lbl">Cost (Min)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost.week)}</div>
+                </div>
+                <div>
+                  <div className="bn-val" style={{ color: C.a }}>{bestKpis.conversions.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                  <div className="bn-lbl">Conversions</div>
+                  <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.conversions.week)}</div>
+                </div>
+                <div>
+                  <div className="bn-val" style={{ color: '#29b6f6' }}>{bestKpis.txn_approved_pct.val.toFixed(1)}%</div>
+                  <div className="bn-lbl">Txn (Appr) %</div>
+                  <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.txn_approved_pct.week)}</div>
+                </div>
+                <div>
+                  <div className="bn-val" style={{ color: '#ef5350' }}>₹{bestKpis.cost_per_txn.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                  <div className="bn-lbl">Cost/Txn (Min)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost_per_txn.week)}</div>
+                </div>
               </div>
             </div>
-            <div className="bn-stats" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-              <div>
-                <div className="bn-val" style={{ color: C.b }}>{bestKpis.impressions.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
-                <div className="bn-lbl">Impressions</div>
-                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.impressions.week)}</div>
-              </div>
-              <div>
-                <div className="bn-val" style={{ color: C.t }}>{bestKpis.clicks.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
-                <div className="bn-lbl">Clicks</div>
-                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.clicks.week)}</div>
-              </div>
-              <div>
-                <div className="bn-val" style={{ color: C.g }}>{bestKpis.ctr.val.toFixed(1)}%</div>
-                <div className="bn-lbl">CTR</div>
-                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.ctr.week)}</div>
-              </div>
-              <div>
-                <div className="bn-val" style={{ color: C.r }}>₹{bestKpis.cost.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
-                <div className="bn-lbl">Cost (Min)</div>
-                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost.week)}</div>
-              </div>
-              <div>
-                <div className="bn-val" style={{ color: C.a }}>{bestKpis.conversions.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
-                <div className="bn-lbl">Conversions</div>
-                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.conversions.week)}</div>
-              </div>
-              <div>
-                <div className="bn-val" style={{ color: '#29b6f6' }}>{bestKpis.txn_approved_pct.val.toFixed(1)}%</div>
-                <div className="bn-lbl">Txn (Appr) %</div>
-                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.txn_approved_pct.week)}</div>
-              </div>
-              <div>
-                <div className="bn-val" style={{ color: '#ef5350' }}>₹{bestKpis.cost_per_txn.val.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
-                <div className="bn-lbl">Cost/Txn (Min)</div>
-                <div style={{ fontSize: '11px', color: 'var(--purple)', fontWeight: 600, marginTop: '2px', textAlign: 'center' }}>{formatWeekLabel(bestKpis.cost_per_txn.week)}</div>
-              </div>
-            </div>
-          </div>
 
-          <div className="sh" style={{ marginTop: '30px' }}>
-            <h2>✨ AI Generated Insights <span>Based on {compareWeeksCount} {timePeriod === 'weekly' ? 'weeks' : timePeriod === 'daily' ? 'days' : 'months'} trend</span></h2>
-          </div>
-          <div className="cc" style={{ margin: 0, marginBottom: '25px', background: 'var(--bg2)', border: '1px solid var(--teal)' }}>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {aiInsights.map((insight, i) => (
-                <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                  <span style={{ color: 'var(--teal)' }}>✦</span>
-                  <span style={{ fontSize: '14px', lineHeight: '1.4' }}>{insight}</span>
-                </li>
-              ))}
-              {aiInsights.length === 0 && <li style={{ color: 'var(--purple)', fontWeight: 600 }}>Not enough data to generate insights.</li>}
-            </ul>
+            {/* AI Insights Block */}
+            <div style={{ flex: '1', display: 'flex', flexDirection: 'column' }}>
+              <div className="sh" style={{ margin: '0 0 10px 0' }}>
+                <h2 style={{ fontSize: '15px' }}>✨ AI Insights <span>Based on {compareWeeksCount} {timePeriod === 'weekly' ? 'weeks' : timePeriod === 'daily' ? 'days' : 'months'} trend</span></h2>
+              </div>
+              <div className="cc" style={{ margin: 0, flex: 1, background: 'var(--bg2)', border: '1px solid var(--teal)', overflowY: 'auto', padding: '15px' }}>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {aiInsights.map((insight, i) => (
+                    <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <span style={{ color: 'var(--teal)' }}>✦</span>
+                      <span style={{ fontSize: '13px', lineHeight: '1.4' }}>{insight}</span>
+                    </li>
+                  ))}
+                  {aiInsights.length === 0 && <li style={{ color: 'var(--purple)', fontWeight: 600, fontSize: '13px' }}>Not enough data to generate insights.</li>}
+                </ul>
+              </div>
+            </div>
           </div>
 
           <div className="cc" style={{ margin: 0, marginBottom: '30px' }}>
@@ -950,7 +1188,7 @@ export default function DailyCampaignTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {METRICS.map(m => (
+                  {METRICS.filter(m => timePeriod === 'weekly' || (m.key !== 'mcat_div' && m.key !== 'pmcat_div')).map(m => (
                     <tr key={m.key}>
                       <td style={{ fontWeight: 500 }}>{m.label}</td>
                       {compareData.map(d => (
@@ -1009,62 +1247,107 @@ export default function DailyCampaignTab() {
         </div>
       ) : (
         <>
-          {/* Standard View Mode */}
-          <div className="banner" style={{ marginBottom: '18px' }}>
-            <div className="bn-left">
-              <div style={{ fontSize: '24px' }}>⚡</div>
-              <div>
-                <div className="bn-title" style={{ color: C.t }}>
-                  {getEntityTitle()}
+          {/* Top Section: Standard View KPIs & AI Insights Side by Side */}
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'stretch', marginBottom: '25px' }}>
+            
+            {/* Standard View Mode KPIs */}
+            <div className="banner" style={{ flex: '2', margin: 0 }}>
+              <div className="bn-left">
+                <div style={{ fontSize: '24px' }}>⚡</div>
+                <div>
+                  <div className="bn-title" style={{ color: C.t }}>
+                    {getEntityTitle()}
+                  </div>
+                  <div className="bn-sub">{timePeriod === 'weekly' ? 'Week' : timePeriod === 'daily' ? 'Date' : 'Month'} of {selectedWeek} · Redshift DWH</div>
                 </div>
-                <div className="bn-sub">{timePeriod === 'weekly' ? 'Week' : timePeriod === 'daily' ? 'Date' : 'Month'} of {selectedWeek} · Redshift DWH</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
+                <div>
+                  <div style={{ color: 'var(--txt)', fontSize: '13px', fontWeight: 600, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Google Ads Performance</div>
+                  <div className="bn-stats" style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
+                    <div><div className="bn-val" style={{ color: C.b }}>{formatVal(kpiStats.impressions, 'impressions')}</div><div className="bn-lbl">Impressions</div></div>
+                    <div><div className="bn-val" style={{ color: C.t }}>{formatVal(kpiStats.clicks, 'clicks')}</div><div className="bn-lbl">Clicks</div></div>
+                    <div><div className="bn-val" style={{ color: C.g }}>{formatVal(kpiStats.ctr, 'ctr')}</div><div className="bn-lbl">CTR</div></div>
+                    <div><div className="bn-val" style={{ color: C.r }}>{formatVal(kpiStats.cost, 'cost')}</div><div className="bn-lbl">Cost</div></div>
+                    <div><div className="bn-val" style={{ color: C.a }}>{formatVal(kpiStats.conversions, 'conversions')}</div><div className="bn-lbl">Conversions</div></div>
+                    <div><div className="bn-val" style={{ color: '#ffb74d' }}>{formatVal(kpiStats.cpc, 'cpc')}</div><div className="bn-lbl">CPC</div></div>
+                    <div><div className="bn-val" style={{ color: '#ef5350' }}>{formatVal(kpiStats.cost_per_conversion, 'cost_per_conversion')}</div><div className="bn-lbl">Cost/Conversion</div></div>
+                  </div>
+                </div>
+                <div style={{ borderTop: '1px solid var(--bdr2)', paddingTop: '15px' }}>
+                  <div style={{ color: 'var(--txt)', fontSize: '13px', fontWeight: 600, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Lead Performance</div>
+                  <div className="bn-stats" style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
+                    <div><div className="bn-val" style={{ color: C.p }}>{formatVal(kpiStats.bl_approved, 'bl_approved')}</div><div className="bn-lbl">BL Approved</div></div>
+                    <div><div className="bn-val" style={{ color: '#66bb6a' }}>{formatVal(kpiStats.bl_sold_approved, 'bl_sold_approved')}</div><div className="bn-lbl">BL Sold</div></div>
+                    <div><div className="bn-val" style={{ color: C.d }}>{formatVal(kpiStats.bl_txn_approved, 'bl_txn_approved')}</div><div className="bn-lbl">Txn</div></div>
+                    <div><div className="bn-val" style={{ color: '#ba68c8' }}>{formatVal(kpiStats.cost_per_bl, 'cost_per_bl')}</div><div className="bn-lbl">Cost / BL</div></div>
+                    <div><div className="bn-val" style={{ color: '#29b6f6' }}>{formatVal(kpiStats.txn_approved_pct, 'txn_approved_pct')}</div><div className="bn-lbl">Txn (Appr) %</div></div>
+                    <div><div className="bn-val" style={{ color: '#ffca28' }}>{formatVal(kpiStats.bl_sold_pct, 'bl_sold_pct')}</div><div className="bn-lbl">BL Sold %</div></div>
+                    <div><div className="bn-val" style={{ color: '#ef5350' }}>{formatVal(kpiStats.cost_per_txn, 'cost_per_txn')}</div><div className="bn-lbl">Cost / Txn</div></div>
+                    {timePeriod === 'weekly' && (
+                      <>
+                        <div>
+                          <div 
+                            className="bn-val" 
+                            style={{ color: '#9ccc65', cursor: kpiStats.mcatMap ? 'pointer' : 'default', textDecoration: kpiStats.mcatMap ? 'underline' : 'none' }} 
+                            onClick={() => {
+                              if (kpiStats.mcatMap) {
+                                setMcatModalData(Array.from(kpiStats.mcatMap.entries()).map(([k, v]: any) => ({ name: k, isAdRunning: v.isAdRunning, bl_approved: v.bl_approved })));
+                                setShowMcatModal(true);
+                              }
+                            }}
+                          >
+                            {formatVal(kpiStats.mcat_div, 'mcat_div')}
+                          </div>
+                          <div className="bn-lbl">MCAT Div.</div>
+                        </div>
+                        <div>
+                          <div 
+                            className="bn-val" 
+                            style={{ color: '#26a69a', cursor: kpiStats.pmcatMap ? 'pointer' : 'default', textDecoration: kpiStats.pmcatMap ? 'underline' : 'none' }}
+                            onClick={() => {
+                              if (kpiStats.pmcatMap) {
+                                setPmcatModalData(Array.from(kpiStats.pmcatMap.entries()).map(([k, v]: any) => ({ name: k, isAdRunning: v.isAdRunning, bl_approved: v.bl_approved })));
+                                setShowPmcatModal(true);
+                              }
+                            }}
+                          >
+                            {formatVal(kpiStats.pmcat_div, 'pmcat_div')}
+                          </div>
+                          <div className="bn-lbl">PMCAT Div.</div>
+                        </div>
+                      </>
+                    )}
+                    <div><div className="bn-val" style={{ color: '#ff8a65' }}>{formatVal(kpiStats.blni, 'blni')}</div><div className="bn-lbl">BLNI</div></div>
+                    <div><div className="bn-val" style={{ color: '#ff7043' }}>{formatVal(kpiStats.blni_pct, 'blni_pct')}</div><div className="bn-lbl">BLNI / Txn %</div></div>
+                    <div><div className="bn-val" style={{ color: '#ff8a65' }}>{formatVal(kpiStats.blni_approved_pct, 'blni_approved_pct')}</div><div className="bn-lbl">BLNI / Appr. %</div></div>
+                    <div><div className="bn-val" style={{ color: '#4dd0e1' }}>{formatVal(kpiStats.enq_approved, 'enq_approved')}</div><div className="bn-lbl">Enq Approved</div></div>
+                    <div><div className="bn-val" style={{ color: '#81c784' }}>{formatVal(kpiStats.calls_approved, 'calls_approved')}</div><div className="bn-lbl">Calls Approved</div></div>
+                    <div><div className="bn-val" style={{ color: '#ba68c8' }}>{formatVal(kpiStats.total_req_approved, 'total_req_approved')}</div><div className="bn-lbl">Total Req Appr.</div></div>
+                    <div><div className="bn-val" style={{ color: '#a1887f' }}>{formatVal(kpiStats.unq_purchaser, 'unq_purchaser')}</div><div className="bn-lbl">Unq Purchaser</div></div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
-              <div>
-                <div style={{ color: 'var(--txt)', fontSize: '13px', fontWeight: 600, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Google Ads Performance</div>
-                <div className="bn-stats" style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
-                  <div><div className="bn-val" style={{ color: C.b }}>{formatVal(kpiStats.impressions, 'impressions')}</div><div className="bn-lbl">Impressions</div></div>
-                  <div><div className="bn-val" style={{ color: C.t }}>{formatVal(kpiStats.clicks, 'clicks')}</div><div className="bn-lbl">Clicks</div></div>
-                  <div><div className="bn-val" style={{ color: C.g }}>{formatVal(kpiStats.ctr, 'ctr')}</div><div className="bn-lbl">CTR</div></div>
-                  <div><div className="bn-val" style={{ color: C.r }}>{formatVal(kpiStats.cost, 'cost')}</div><div className="bn-lbl">Cost</div></div>
-                  <div><div className="bn-val" style={{ color: C.a }}>{formatVal(kpiStats.conversions, 'conversions')}</div><div className="bn-lbl">Conversions</div></div>
-                  <div><div className="bn-val" style={{ color: '#ffb74d' }}>{formatVal(kpiStats.cpc, 'cpc')}</div><div className="bn-lbl">CPC</div></div>
-                  <div><div className="bn-val" style={{ color: '#ef5350' }}>{formatVal(kpiStats.cost_per_conversion, 'cost_per_conversion')}</div><div className="bn-lbl">Cost/Conversion</div></div>
-                </div>
-              </div>
-              <div style={{ borderTop: '1px solid var(--bdr2)', paddingTop: '15px' }}>
-                <div style={{ color: 'var(--txt)', fontSize: '13px', fontWeight: 600, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Lead Performance</div>
-                <div className="bn-stats" style={{ display: 'flex', gap: '22px', flexWrap: 'wrap' }}>
-                  <div><div className="bn-val" style={{ color: C.p }}>{formatVal(kpiStats.bl_approved, 'bl_approved')}</div><div className="bn-lbl">BL Approved</div></div>
-                  <div><div className="bn-val" style={{ color: '#66bb6a' }}>{formatVal(kpiStats.bl_sold_approved, 'bl_sold_approved')}</div><div className="bn-lbl">BL Sold</div></div>
-                  <div><div className="bn-val" style={{ color: C.d }}>{formatVal(kpiStats.bl_txn_approved, 'bl_txn_approved')}</div><div className="bn-lbl">Txn</div></div>
-                  <div><div className="bn-val" style={{ color: '#ba68c8' }}>{formatVal(kpiStats.cost_per_bl, 'cost_per_bl')}</div><div className="bn-lbl">Cost / BL</div></div>
-                  <div><div className="bn-val" style={{ color: '#29b6f6' }}>{formatVal(kpiStats.txn_approved_pct, 'txn_approved_pct')}</div><div className="bn-lbl">Txn (Appr) %</div></div>
-                  <div><div className="bn-val" style={{ color: '#ffca28' }}>{formatVal(kpiStats.bl_sold_pct, 'bl_sold_pct')}</div><div className="bn-lbl">BL Sold %</div></div>
-                  <div><div className="bn-val" style={{ color: '#ef5350' }}>{formatVal(kpiStats.cost_per_txn, 'cost_per_txn')}</div><div className="bn-lbl">Cost / Txn</div></div>
-                  <div><div className="bn-val" style={{ color: '#9ccc65' }}>{formatVal(kpiStats.mcat_div, 'mcat_div')}</div><div className="bn-lbl">MCAT Div.</div></div>
-                  <div><div className="bn-val" style={{ color: '#26a69a' }}>{formatVal(kpiStats.pmcat_div, 'pmcat_div')}</div><div className="bn-lbl">PMCAT Div.</div></div>
-                  <div><div className="bn-val" style={{ color: '#ff8a65' }}>{formatVal(kpiStats.blni, 'blni')}</div><div className="bn-lbl">BLNI</div></div>
-                  <div><div className="bn-val" style={{ color: '#ff7043' }}>{formatVal(kpiStats.blni_pct, 'blni_pct')}</div><div className="bn-lbl">BLNI %</div></div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <div className="sh" style={{ marginTop: '30px' }}>
-            <h2>✨ AI Generated Insights <span>Based on selected filters</span></h2>
-          </div>
-          <div className="cc" style={{ margin: 0, marginBottom: '25px', background: 'var(--bg2)', border: '1px solid var(--teal)' }}>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {aiInsights.map((insight, i) => (
-                <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                  <span style={{ color: 'var(--teal)' }}>✦</span>
-                  <span style={{ fontSize: '14px', lineHeight: '1.4' }}>{insight}</span>
-                </li>
-              ))}
-              {aiInsights.length === 0 && <li style={{ color: 'var(--purple)', fontWeight: 600 }}>Not enough data to generate insights for this selection.</li>}
-            </ul>
+            {/* AI Insights Block */}
+            <div style={{ flex: '1', display: 'flex', flexDirection: 'column' }}>
+              <div className="sh" style={{ margin: '0 0 10px 0' }}>
+                <h2 style={{ fontSize: '15px' }}>✨ AI Insights <span>Based on selected filters</span></h2>
+              </div>
+              <div className="cc" style={{ margin: 0, flex: 1, background: 'var(--bg2)', border: '1px solid var(--teal)', overflowY: 'auto', padding: '15px' }}>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {aiInsights.map((insight, i) => (
+                    <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <span style={{ color: 'var(--teal)' }}>✦</span>
+                      <span style={{ fontSize: '13px', lineHeight: '1.4' }}>{insight}</span>
+                    </li>
+                  ))}
+                  {aiInsights.length === 0 && <li style={{ color: 'var(--purple)', fontWeight: 600, fontSize: '13px' }}>Not enough data to generate insights for this selection.</li>}
+                </ul>
+              </div>
+            </div>
+
           </div>
 
           { ((granularity === 'group' && selectedGroup === 'all') ||
@@ -1077,7 +1360,7 @@ export default function DailyCampaignTab() {
 
               <div style={{ marginBottom: '20px', maxWidth: '300px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', color: 'var(--teal)', fontWeight: 'bold' }}>Rank By KPI</label>
-                <SearchableSelect 
+                <SearchableSelect
                   value={rankMetric}
                   onChange={(val) => setRankMetric(val)}
                   options={METRICS.map(m => ({ label: `Rank by ${m.label}`, value: m.key }))}
@@ -1238,7 +1521,7 @@ export default function DailyCampaignTab() {
                 <table className="dt" style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: '1500px' }}>
                   <thead>
                     <tr>
-                      <th style={{ position: 'sticky', left: 0, top: 0, background: 'var(--bg2)', zIndex: 11, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Group Name</th>
+                      <th style={{ position: 'sticky', left: 0, top: 0, background: 'var(--bg2)', zIndex: 50, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Group Name</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Impressions</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Clicks</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>CTR</th>
@@ -1253,10 +1536,15 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Txn (Appr) %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BL Sold %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Cost / Txn</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>}
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>}
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Appr. %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1277,32 +1565,56 @@ export default function DailyCampaignTab() {
                         <td className="num" style={{ color: '#29b6f6' }}>{formatVal(row.txn_approved_pct, 'txn_approved_pct')}</td>
                         <td className="num" style={{ color: '#ffca28' }}>{formatVal(row.bl_sold_pct, 'bl_sold_pct')}</td>
                         <td className="num" style={{ color: '#ef5350' }}>{formatVal(row.cost_per_txn, 'cost_per_txn')}</td>
-                        <td className="num">{formatVal(row.mcat_div, 'mcat_div')}</td>
-                        <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                        {timePeriod === 'weekly' && (
+                          <>
+                            <td className="num" style={{ cursor: row.mcatMap ? 'pointer' : 'default', textDecoration: row.mcatMap ? 'underline' : 'none', color: '#9ccc65' }} onClick={() => {
+                              if (row.mcatMap) {
+                                setMcatModalData(Array.from(row.mcatMap.entries()).map(([k, v]: any) => ({ name: k, isAdRunning: v.isAdRunning, bl_approved: v.bl_approved })));
+                                setShowMcatModal(true);
+                              }
+                            }}>{formatVal(row.mcat_div, 'mcat_div')}</td>
+                            <td className="num" style={{ cursor: row.pmcatMap ? 'pointer' : 'default', textDecoration: row.pmcatMap ? 'underline' : 'none', color: '#26a69a' }} onClick={() => {
+                              if (row.pmcatMap) {
+                                setPmcatModalData(Array.from(row.pmcatMap.entries()).map(([k, v]: any) => ({ name: k, isAdRunning: v.isAdRunning, bl_approved: v.bl_approved })));
+                                setShowPmcatModal(true);
+                              }
+                            }}>{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                          </>
+                        )}
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
+                        <td className="num" style={{ color: '#ff8a65' }}>{formatVal(row.blni_approved_pct, 'blni_approved_pct')}</td>
+                        <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
+                        <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
+                        <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
+                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
-                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
-                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg3)', zIndex: 11, fontWeight: 'bold' }}>Total</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.impressions, 'impressions')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.clicks, 'clicks')}</td>
-                      <td className="num" style={{ color: C.g }}>{formatVal(groupPerformanceData.totals.ctr, 'ctr')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.cost, 'cost')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.conversions, 'conversions')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.cpc, 'cpc')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.cost_per_conversion, 'cost_per_conversion')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.bl_approved, 'bl_approved')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.bl_sold_approved, 'bl_sold_approved')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.bl_txn_approved, 'bl_txn_approved')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.cost_per_bl, 'cost_per_bl')}</td>
-                      <td className="num" style={{ color: '#29b6f6' }}>{formatVal(groupPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
-                      <td className="num" style={{ color: '#ffca28' }}>{formatVal(groupPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
-                      <td className="num" style={{ color: '#ef5350' }}>{formatVal(groupPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.mcat_div, 'mcat_div')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.blni, 'blni')}</td>
-                      <td className="num">{formatVal(groupPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg2)', zIndex: 50, fontWeight: 'bold' }}>Total</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.impressions, 'impressions')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.clicks, 'clicks')}</td>
+                      <td className="num" style={{ color: C.g, position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.ctr, 'ctr')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.cost, 'cost')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.conversions, 'conversions')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.cpc, 'cpc')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.cost_per_conversion, 'cost_per_conversion')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.bl_approved, 'bl_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.bl_sold_approved, 'bl_sold_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.bl_txn_approved, 'bl_txn_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.cost_per_bl, 'cost_per_bl')}</td>
+                      <td className="num" style={{ color: '#29b6f6', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
+                      <td className="num" style={{ color: '#ffca28', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
+                      <td className="num" style={{ color: '#ef5350', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
+                      {timePeriod === 'weekly' && <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.mcat_div, 'mcat_div')}</td>}
+                      {timePeriod === 'weekly' && <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>}
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.blni, 'blni')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                      <td className="num" style={{ color: '#ff8a65', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.blni_approved_pct, 'blni_approved_pct')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.enq_approved, 'enq_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.calls_approved, 'calls_approved')}</td>
+                      <td className="num" style={{ color: '#ba68c8', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
+                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1329,7 +1641,7 @@ export default function DailyCampaignTab() {
                 <table className="dt" style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: '1500px' }}>
                   <thead>
                     <tr>
-                      <th style={{ position: 'sticky', left: 0, top: 0, background: 'var(--bg2)', zIndex: 11, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT</th>
+                      <th style={{ position: 'sticky', left: 0, top: 0, background: 'var(--bg2)', zIndex: 50, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT</th>
                       <th style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Parent Group</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Impressions</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Clicks</th>
@@ -1345,10 +1657,14 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Txn (Appr) %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BL Sold %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Cost / Txn</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>}
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>}
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1370,14 +1686,27 @@ export default function DailyCampaignTab() {
                         <td className="num" style={{ color: '#29b6f6' }}>{formatVal(row.txn_approved_pct, 'txn_approved_pct')}</td>
                         <td className="num" style={{ color: '#ffca28' }}>{formatVal(row.bl_sold_pct, 'bl_sold_pct')}</td>
                         <td className="num" style={{ color: '#ef5350' }}>{formatVal(row.cost_per_txn, 'cost_per_txn')}</td>
-                        <td className="num">{formatVal(row.mcat_div, 'mcat_div')}</td>
-                        <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                        {timePeriod === 'weekly' && (
+                          <>
+                            <td className="num" style={{ cursor: row.mcatMap ? 'pointer' : 'default', textDecoration: row.mcatMap ? 'underline' : 'none', color: '#9ccc65' }} onClick={() => {
+                              if (row.mcatMap) {
+                                setMcatModalData(Array.from(row.mcatMap.entries()).map(([k, v]: any) => ({ name: k, isAdRunning: v.isAdRunning, bl_approved: v.bl_approved })));
+                                setShowMcatModal(true);
+                              }
+                            }}>{formatVal(row.mcat_div, 'mcat_div')}</td>
+                            <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                          </>
+                        )}
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
+                        <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
+                        <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
+                        <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
+                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
-                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
-                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold' }}>Total</td>
+                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg2)', zIndex: 50, fontWeight: 'bold' }}>Total</td>
                       <td />
                       <td className="num">{formatVal(pmcatPerformanceData.totals.impressions, 'impressions')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.clicks, 'clicks')}</td>
@@ -1393,10 +1722,14 @@ export default function DailyCampaignTab() {
                       <td className="num" style={{ color: '#29b6f6' }}>{formatVal(pmcatPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
                       <td className="num" style={{ color: '#ffca28' }}>{formatVal(pmcatPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
                       <td className="num" style={{ color: '#ef5350' }}>{formatVal(pmcatPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
-                      <td className="num">{formatVal(pmcatPerformanceData.totals.mcat_div, 'mcat_div')}</td>
-                      <td className="num">{formatVal(pmcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
+                      {timePeriod === 'weekly' && <td className="num">{formatVal(pmcatPerformanceData.totals.mcat_div, 'mcat_div')}</td>}
+                      {timePeriod === 'weekly' && <td className="num">{formatVal(pmcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>}
                       <td className="num">{formatVal(pmcatPerformanceData.totals.blni, 'blni')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                      <td className="num">{formatVal(pmcatPerformanceData.totals.enq_approved, 'enq_approved')}</td>
+                      <td className="num">{formatVal(pmcatPerformanceData.totals.calls_approved, 'calls_approved')}</td>
+                      <td className="num" style={{ color: '#ba68c8' }}>{formatVal(pmcatPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
+                      <td className="num">{formatVal(pmcatPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1423,7 +1756,7 @@ export default function DailyCampaignTab() {
                 <table className="dt" style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: '1500px' }}>
                   <thead>
                     <tr>
-                      <th style={{ position: 'sticky', left: 0, top: 0, background: 'var(--bg2)', zIndex: 11, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT</th>
+                      <th style={{ position: 'sticky', left: 0, top: 0, background: 'var(--bg2)', zIndex: 50, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT</th>
                       <th style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Parent PMCAT</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Impressions</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Clicks</th>
@@ -1439,10 +1772,14 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Txn (Appr) %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BL Sold %</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Cost / Txn</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>MCAT Div.</th>}
+                      {timePeriod === 'weekly' && <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>PMCAT Div.</th>}
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>BLNI / Txn %</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
+                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1464,14 +1801,22 @@ export default function DailyCampaignTab() {
                         <td className="num" style={{ color: '#29b6f6' }}>{formatVal(row.txn_approved_pct, 'txn_approved_pct')}</td>
                         <td className="num" style={{ color: '#ffca28' }}>{formatVal(row.bl_sold_pct, 'bl_sold_pct')}</td>
                         <td className="num" style={{ color: '#ef5350' }}>{formatVal(row.cost_per_txn, 'cost_per_txn')}</td>
-                        <td className="num">{formatVal(row.mcat_div, 'mcat_div')}</td>
-                        <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                        {timePeriod === 'weekly' && (
+                          <>
+                            <td className="num">{formatVal(row.mcat_div, 'mcat_div')}</td>
+                            <td className="num">{formatVal(row.pmcat_div, 'pmcat_div')}</td>
+                          </>
+                        )}
                         <td className="num">{formatVal(row.blni, 'blni')}</td>
                         <td className="num">{formatVal(row.blni_pct, 'blni_pct')}</td>
+                        <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
+                        <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
+                        <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
+                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
-                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
-                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg2)', zIndex: 30, fontWeight: 'bold' }}>Total</td>
+                    <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
+                      <td style={{ position: 'sticky', left: 0, bottom: 0, background: 'var(--bg2)', zIndex: 50, fontWeight: 'bold' }}>Total</td>
                       <td />
                       <td className="num">{formatVal(mcatPerformanceData.totals.impressions, 'impressions')}</td>
                       <td className="num">{formatVal(mcatPerformanceData.totals.clicks, 'clicks')}</td>
@@ -1487,10 +1832,14 @@ export default function DailyCampaignTab() {
                       <td className="num" style={{ color: '#29b6f6' }}>{formatVal(mcatPerformanceData.totals.txn_approved_pct, 'txn_approved_pct')}</td>
                       <td className="num" style={{ color: '#ffca28' }}>{formatVal(mcatPerformanceData.totals.bl_sold_pct, 'bl_sold_pct')}</td>
                       <td className="num" style={{ color: '#ef5350' }}>{formatVal(mcatPerformanceData.totals.cost_per_txn, 'cost_per_txn')}</td>
-                      <td className="num">{formatVal(mcatPerformanceData.totals.mcat_div, 'mcat_div')}</td>
-                      <td className="num">{formatVal(mcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>
+                      {timePeriod === 'weekly' && <td className="num">{formatVal(mcatPerformanceData.totals.mcat_div, 'mcat_div')}</td>}
+                      {timePeriod === 'weekly' && <td className="num">{formatVal(mcatPerformanceData.totals.pmcat_div, 'pmcat_div')}</td>}
                       <td className="num">{formatVal(mcatPerformanceData.totals.blni, 'blni')}</td>
                       <td className="num">{formatVal(mcatPerformanceData.totals.blni_pct, 'blni_pct')}</td>
+                      <td className="num">{formatVal(mcatPerformanceData.totals.enq_approved, 'enq_approved')}</td>
+                      <td className="num">{formatVal(mcatPerformanceData.totals.calls_approved, 'calls_approved')}</td>
+                      <td className="num" style={{ color: '#ba68c8' }}>{formatVal(mcatPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
+                      <td className="num">{formatVal(mcatPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1499,6 +1848,153 @@ export default function DailyCampaignTab() {
           )}
         </>
       )}
+
+      {/* MCAT Diversity Breakdown Modal */}
+      {showMcatModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg)', color: 'var(--txt)', border: '1px solid var(--bdr)', borderRadius: '8px', padding: '20px', minWidth: '750px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: '-20px', background: 'var(--bg)', zIndex: 100, padding: '20px 20px 15px 20px', margin: '-20px -20px 15px -20px', borderBottom: '1px solid var(--bdr)' }}>
+              <h3 style={{ margin: 0, color: 'var(--txt)' }}>MCAT Diversity Details</h3>
+              <button onClick={() => setShowMcatModal(false)} style={{ background: 'none', border: 'none', color: 'var(--txt)', cursor: 'pointer', fontSize: '28px', lineHeight: '1', padding: '0 5px' }}>&times;</button>
+            </div>
+            {(() => {
+              const adsRunningList = mcatModalData.filter(m => m.isAdRunning).sort((a,b) => b.bl_approved - a.bl_approved);
+              const blGe10List = mcatModalData.filter(m => m.bl_approved >= 10).sort((a,b) => b.bl_approved - a.bl_approved);
+              const diversity = adsRunningList.length > 0 ? ((blGe10List.length / adsRunningList.length) * 100).toFixed(1) : 0;
+              return (
+                <>
+                  <div style={{ display: 'flex', gap: '20px', marginBottom: '15px', padding: '12px', background: 'var(--bg2)', border: '1px solid var(--bdr2)', borderRadius: '6px', fontSize: '14px', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}><strong>Total Ads Running MCATs:</strong> <span style={{color: '#9ccc65', marginLeft: '5px'}}>{adsRunningList.length}</span></div>
+                    <div style={{ flex: 1 }}><strong>Total MCATs (BL &ge; 10):</strong> <span style={{color: '#9ccc65', marginLeft: '5px'}}>{blGe10List.length}</span></div>
+                    <div><strong>Diversity:</strong> <span style={{color: '#29b6f6', marginLeft: '5px', fontSize: '18px', fontWeight: 'bold'}}>{diversity}%</span></div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '24px' }}>
+                    {/* Left Column */}
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid var(--bdr)', paddingBottom: '8px', color: 'var(--txt)' }}>📋 Ads Running MCATs</h4>
+                      <table className="dt" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ color: 'var(--txt)' }}>MCAT Name</th>
+                            <th className="num" style={{ color: 'var(--txt)' }}>BL Approved</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adsRunningList.map((item, idx) => (
+                            <tr key={idx}>
+                              <td style={{ color: 'var(--txt)' }}>{item.name}</td>
+                              <td className="num" style={{ color: 'var(--txt)' }}>{item.bl_approved}</td>
+                            </tr>
+                          ))}
+                          {adsRunningList.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', padding: '20px', color: 'var(--txt)' }}>None found</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Right Column */}
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid var(--bdr)', paddingBottom: '8px', color: 'var(--txt)' }}>⭐ MCATs (BL &ge; 10)</h4>
+                      <table className="dt" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ color: 'var(--txt)' }}>MCAT Name</th>
+                            <th className="num" style={{ color: 'var(--txt)' }}>BL Approved</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {blGe10List.map((item, idx) => (
+                            <tr key={idx}>
+                              <td style={{ color: 'var(--txt)' }}>{item.name}</td>
+                              <td className="num" style={{ color: '#9ccc65', fontWeight: 'bold' }}>{item.bl_approved}</td>
+                            </tr>
+                          ))}
+                          {blGe10List.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', padding: '20px', color: 'var(--txt)' }}>None found</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* PMCAT Diversity Breakdown Modal */}
+      {showPmcatModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg)', color: 'var(--txt)', border: '1px solid var(--bdr)', borderRadius: '8px', padding: '20px', minWidth: '750px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: '-20px', background: 'var(--bg)', zIndex: 100, padding: '20px 20px 15px 20px', margin: '-20px -20px 15px -20px', borderBottom: '1px solid var(--bdr)' }}>
+              <h3 style={{ margin: 0, color: 'var(--txt)' }}>PMCAT Diversity Details</h3>
+              <button onClick={() => setShowPmcatModal(false)} style={{ background: 'none', border: 'none', color: 'var(--txt)', cursor: 'pointer', fontSize: '28px', lineHeight: '1', padding: '0 5px' }}>&times;</button>
+            </div>
+            {(() => {
+              const adsRunningList = pmcatModalData.filter(m => m.isAdRunning).sort((a,b) => b.bl_approved - a.bl_approved);
+              const blGe25List = pmcatModalData.filter(m => m.bl_approved >= 25).sort((a,b) => b.bl_approved - a.bl_approved);
+              const diversity = adsRunningList.length > 0 ? ((blGe25List.length / adsRunningList.length) * 100).toFixed(1) : 0;
+              return (
+                <>
+                  <div style={{ display: 'flex', gap: '20px', marginBottom: '15px', padding: '12px', background: 'var(--bg2)', border: '1px solid var(--bdr2)', borderRadius: '6px', fontSize: '14px', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}><strong>Total Ads Running PMCATs:</strong> <span style={{color: '#26a69a', marginLeft: '5px'}}>{adsRunningList.length}</span></div>
+                    <div style={{ flex: 1 }}><strong>Total PMCATs (BL &ge; 25):</strong> <span style={{color: '#26a69a', marginLeft: '5px'}}>{blGe25List.length}</span></div>
+                    <div><strong>Diversity:</strong> <span style={{color: '#29b6f6', marginLeft: '5px', fontSize: '18px', fontWeight: 'bold'}}>{diversity}%</span></div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '24px' }}>
+                    {/* Left Column */}
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid var(--bdr)', paddingBottom: '8px', color: 'var(--txt)' }}>📋 Ads Running PMCATs</h4>
+                      <table className="dt" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ color: 'var(--txt)' }}>PMCAT Name</th>
+                            <th className="num" style={{ color: 'var(--txt)' }}>BL Approved</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adsRunningList.map((item, idx) => (
+                            <tr key={idx}>
+                              <td style={{ color: 'var(--txt)' }}>{item.name}</td>
+                              <td className="num" style={{ color: 'var(--txt)' }}>{item.bl_approved}</td>
+                            </tr>
+                          ))}
+                          {adsRunningList.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', padding: '20px', color: 'var(--txt)' }}>None found</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Right Column */}
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid var(--bdr)', paddingBottom: '8px', color: 'var(--txt)' }}>⭐ PMCATs (BL &ge; 25)</h4>
+                      <table className="dt" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ color: 'var(--txt)' }}>PMCAT Name</th>
+                            <th className="num" style={{ color: 'var(--txt)' }}>BL Approved</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {blGe25List.map((item, idx) => (
+                            <tr key={idx}>
+                              <td style={{ color: 'var(--txt)' }}>{item.name}</td>
+                              <td className="num" style={{ color: '#26a69a', fontWeight: 'bold' }}>{item.bl_approved}</td>
+                            </tr>
+                          ))}
+                          {blGe25List.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', padding: '20px', color: 'var(--txt)' }}>None found</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+
+

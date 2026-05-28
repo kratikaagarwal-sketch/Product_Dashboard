@@ -13,10 +13,12 @@ import BlTab from "@/components/tabs/BlTab";
 import TrafficEnquiryTab from "@/components/tabs/TrafficEnquiryTab";
 import DailyCampaignTab from "@/components/tabs/DailyCampaignTab";
 import WeeklyReportTab from "@/components/tabs/WeeklyReportTab";
+import { prefetchCachedApiData } from "@/lib/clientApiCache";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly_report");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [visitedTabs, setVisitedTabs] = useState<string[]>(["weekly_report"]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -41,6 +43,31 @@ export default function Home() {
     };
   }, [isSidebarOpen]);
 
+  useEffect(() => {
+    setVisitedTabs(prev => (prev.includes(activeTab) ? prev : [...prev, activeTab]));
+  }, [activeTab]);
+
+  useEffect(() => {
+    const windowWithIdle = window as Window & {
+      requestIdleCallback?: (callback: () => void) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    const warmUpHeavyTabs = () => {
+      prefetchCachedApiData<any[]>("daily-campaign:daily", "/api/daily-campaign?period=daily");
+      prefetchCachedApiData<any[]>("daily-campaign:weekly", "/api/daily-campaign?period=weekly");
+      prefetchCachedApiData<string[]>("ads-running-mcats", "/api/ads-running-mcats");
+    };
+
+    if (windowWithIdle.requestIdleCallback) {
+      const idleHandle = windowWithIdle.requestIdleCallback(warmUpHeavyTabs);
+      return () => windowWithIdle.cancelIdleCallback?.(idleHandle);
+    }
+
+    const timeoutId = window.setTimeout(warmUpHeavyTabs, 400);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
   return (
     <div className="layout">
       <Sidebar
@@ -60,10 +87,18 @@ export default function Home() {
           {activeTab === "traffic_enquiry" && <TrafficEnquiryTab />}
           {activeTab === "hygiene" && <HygieneTab />}
           {activeTab === "mcat" && <McatPauseTab />}
-          {activeTab === "daily_campaign" && <DailyCampaignTab />}
-          {activeTab === "weekly_report" && <WeeklyReportTab />}
           {activeTab === "diversity" && <CategoryDiversityTab />}
           {activeTab === "ai" && <AiInsightsTab />}
+          {visitedTabs.includes("daily_campaign") && (
+            <div style={{ display: activeTab === "daily_campaign" ? "block" : "none" }}>
+              <DailyCampaignTab />
+            </div>
+          )}
+          {visitedTabs.includes("weekly_report") && (
+            <div style={{ display: activeTab === "weekly_report" ? "block" : "none" }}>
+              <WeeklyReportTab />
+            </div>
+          )}
           
           {/* Default view for unimplemented tabs */}
           {!["overview", "google", "bl", "traffic_enquiry", "hygiene", "mcat", "daily_campaign", "weekly_report", "diversity", "ai"].includes(activeTab) && (

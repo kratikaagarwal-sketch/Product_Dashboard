@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import ChartComponent from '../ChartComponent';
 import SearchableSelect from '../SearchableSelect';
+import { useCachedApiData } from '@/lib/clientApiCache';
 
 const C = { t: '#00cba4', b: '#4d9fff', g: '#3dd68c', r: '#ff6168', a: '#ffb547', p: '#a78bfa', d: '#4a6070' };
 
@@ -34,10 +35,6 @@ const METRICS = [
 ];
 
 export default function DailyCampaignTab() {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   // Filters
   const [timePeriod, setTimePeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [selectedWeek, setSelectedWeek] = useState<string>('');
@@ -55,56 +52,37 @@ export default function DailyCampaignTab() {
   const [rankMetric, setRankMetric] = useState<string>('ctr');
   const [page, setPage] = useState(0);
 
-  const [adsRunningMcats, setAdsRunningMcats] = useState<string[]>([]);
-  const [adsRunningLoading, setAdsRunningLoading] = useState(true);
-
   const [showMcatModal, setShowMcatModal] = useState(false);
   const [mcatModalData, setMcatModalData] = useState<any[]>([]);
 
   const [showPmcatModal, setShowPmcatModal] = useState(false);
   const [pmcatModalData, setPmcatModalData] = useState<any[]>([]);
+  const {
+    data: campaignData,
+    loading,
+    error
+  } = useCachedApiData<any[]>(`daily-campaign:${timePeriod}`, `/api/daily-campaign?period=${timePeriod}`);
+  const {
+    data: adsRunningMcatsData,
+    loading: adsRunningLoading
+  } = useCachedApiData<string[]>('ads-running-mcats', '/api/ads-running-mcats');
 
   useEffect(() => {
     setPage(0);
   }, [granularity, selectedGroup, selectedPmcat, selectedMcat, selectedWeek]);
 
-  // Fetch data
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/daily-campaign?period=${timePeriod}`)
-      .then(r => r.json())
-      .then(res => {
-        if (res.success) {
-          setData(res.data);
-          const dateArr = Array.from(new Set(res.data.map((d: any) => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a));
-          if (dateArr.length > 0) {
-            setSelectedWeek(dateArr[0] as string);
-          } else {
-            setSelectedWeek('');
-          }
-        } else {
-          setError(res.error || 'Failed to fetch Redshift data');
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
+    const dateArr = Array.from(new Set((campaignData ?? []).map((d: any) => d.week_start_date)))
+      .sort((a: any, b: any) => b.localeCompare(a));
 
-    fetch('/api/ads-running-mcats')
-      .then(r => r.json())
-      .then(res => {
-        if (res.success) setAdsRunningMcats(res.data);
-        setAdsRunningLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setAdsRunningLoading(false);
-      });
-  }, [timePeriod]);
+    setSelectedWeek(prev => {
+      if (prev && dateArr.includes(prev)) return prev as string;
+      return dateArr.length > 0 ? dateArr[0] as string : '';
+    });
+  }, [campaignData]);
 
+  const data = campaignData ?? [];
+  const adsRunningMcats = adsRunningMcatsData ?? [];
   const adsRunningSet = useMemo(() => new Set(adsRunningMcats.map(m => m.toLowerCase().trim())), [adsRunningMcats]);
 
   // Enrich data for Group, PMCAT, MCAT directly from the query
@@ -234,14 +212,14 @@ export default function DailyCampaignTab() {
   };
 
   // Standard Week KPI calculation
-  const kpiStats = useMemo(() => calcKpisForWeek(selectedWeek), [selectedWeek, baseFilteredData]);
+  const kpiStats = useMemo(() => calcKpisForWeek(selectedWeek), [selectedWeek, baseFilteredData, adsRunningSet, timePeriod]);
 
   // Compare Mode Calculations
   const compareData = useMemo(() => {
     return compareWeeksList.map(week => {
       return { week, stats: calcKpisForWeek(week) };
     });
-  }, [compareWeeksList, baseFilteredData]);
+  }, [compareWeeksList, baseFilteredData, adsRunningSet, timePeriod]);
 
   // Roll up data by Group Name for table
   const groupPerformanceData = useMemo(() => {

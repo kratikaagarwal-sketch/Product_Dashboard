@@ -21,6 +21,11 @@ type WeeklyReportResponse = {
   };
 };
 
+const MOBILE_METRIC_WIDTH = 150;
+const DESKTOP_METRIC_WIDTH = 200;
+const MOBILE_BEST_WIDTH = 96;
+const DESKTOP_BEST_WIDTH = 120;
+
 export default function WeeklyReportTab() {
   const [isMobile, setIsMobile] = useState(false);
   const [granularity, setGranularity] = useState<Granularity>('group');
@@ -361,10 +366,10 @@ export default function WeeklyReportTab() {
                   Section
                 </th>
               )}
-              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', textAlign: 'left', minWidth: isMobile ? '180px' : '200px', position: 'sticky', left: 0, top: 0, background: 'var(--surf2)', zIndex: 20 }}>
+              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', textAlign: 'left', minWidth: isMobile ? `${MOBILE_METRIC_WIDTH}px` : `${DESKTOP_METRIC_WIDTH}px`, width: isMobile ? `${MOBILE_METRIC_WIDTH}px` : `${DESKTOP_METRIC_WIDTH}px`, position: 'sticky', left: 0, top: 0, background: 'var(--surf2)', zIndex: 20, whiteSpace: 'normal', wordBreak: 'break-word', boxShadow: isMobile ? '2px 0 0 var(--bdr)' : undefined }}>
                 Metric
               </th>
-              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', minWidth: isMobile ? '110px' : '120px', background: 'var(--amber)', color: 'var(--bg)', position: 'sticky', top: 0, zIndex: 10 }}>
+              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', minWidth: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, width: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, background: 'var(--amber)', color: 'var(--bg)', position: 'sticky', left: isMobile ? `${MOBILE_METRIC_WIDTH}px` : undefined, top: 0, zIndex: isMobile ? 19 : 10, whiteSpace: 'normal', wordBreak: 'break-word', boxShadow: isMobile ? '2px 0 0 var(--bdr)' : undefined }}>
                 Best ever
               </th>
               {weeks.map(week => (
@@ -411,7 +416,7 @@ export default function WeeklyReportTab() {
                         {sectionName}
                       </td>
                     )}
-                    <td style={{ padding: '8px 12px', textAlign: 'left', position: 'sticky', left: 0, background: 'var(--surf)', zIndex: 5, borderRight: '1px solid var(--bdr)', minWidth: isMobile ? '180px' : '200px' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'left', position: 'sticky', left: 0, background: 'var(--surf)', zIndex: 5, borderRight: '1px solid var(--bdr)', minWidth: isMobile ? `${MOBILE_METRIC_WIDTH}px` : `${DESKTOP_METRIC_WIDTH}px`, width: isMobile ? `${MOBILE_METRIC_WIDTH}px` : `${DESKTOP_METRIC_WIDTH}px`, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, boxShadow: isMobile ? '2px 0 0 var(--bdr)' : undefined }}>
                       {isMobile && isFirstInSection && (
                         <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--teal)', marginBottom: '6px' }}>
                           {sectionName}
@@ -419,7 +424,7 @@ export default function WeeklyReportTab() {
                       )}
                       <div>{metric.label}</div>
                     </td>
-                    <td style={{ padding: '8px 12px', minWidth: isMobile ? '110px' : '120px', background: 'var(--adim)' }}>
+                    <td style={{ padding: '8px 12px', minWidth: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, width: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, background: isMobile ? 'var(--surf2)' : 'var(--adim)', position: isMobile ? 'sticky' : 'static', left: isMobile ? `${MOBILE_METRIC_WIDTH}px` : undefined, zIndex: isMobile ? 4 : undefined, boxShadow: isMobile ? '2px 0 0 var(--bdr)' : undefined }}>
                       {formatVal(reportData.bestEver[metric.key] ?? null, metric.type)}
                     </td>
                     {reportData.dataByWeek.map(entry => (

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import ChartComponent from '../ChartComponent';
 import SearchableSelect from '../SearchableSelect';
 
@@ -872,6 +873,69 @@ export default function DailyCampaignTab() {
     if (granularity === 'group') return selectedGroup === 'all' ? 'All Groups' : selectedGroup;
     if (granularity === 'pmcat') return selectedPmcat === 'all' ? (selectedGroup === 'all' ? 'All PMCATs' : `PMCATs in ${selectedGroup}`) : selectedPmcat;
     return selectedMcat === 'all' ? (selectedPmcat === 'all' ? 'All MCATs' : `MCATs in ${selectedPmcat}`) : selectedMcat;
+  };
+
+  const sanitizeFileName = (value: string) => {
+    return value.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase();
+  };
+
+  const downloadDiversityExcel = (type: 'mcat' | 'pmcat') => {
+    const isMcat = type === 'mcat';
+    const label = isMcat ? 'MCAT' : 'PMCAT';
+    const threshold = isMcat ? 10 : 25;
+    const modalData = isMcat ? mcatModalData : pmcatModalData;
+    const adsRunningList = modalData
+      .filter(item => item.isAdRunning)
+      .sort((a, b) => b.bl_approved - a.bl_approved);
+    const qualifiedList = modalData
+      .filter(item => item.bl_approved >= threshold)
+      .sort((a, b) => b.bl_approved - a.bl_approved);
+    const diversity = adsRunningList.length > 0
+      ? Number(((qualifiedList.length / adsRunningList.length) * 100).toFixed(1))
+      : 0;
+
+    const wb = XLSX.utils.book_new();
+    const summarySheet = XLSX.utils.json_to_sheet([
+      { Metric: 'Entity', Value: getEntityTitle() },
+      { Metric: 'Time Period', Value: timePeriod },
+      { Metric: 'Selected Week', Value: selectedWeek || 'N/A' },
+      { Metric: `Total Ads Running ${label}s`, Value: adsRunningList.length },
+      { Metric: `Total ${label}s (BL >= ${threshold})`, Value: qualifiedList.length },
+      { Metric: 'Diversity %', Value: diversity }
+    ]);
+    const allDataSheet = XLSX.utils.json_to_sheet(
+      [...modalData]
+        .sort((a, b) => b.bl_approved - a.bl_approved)
+        .map(item => ({
+          [`${label} Name`]: item.name,
+          'BL Approved': item.bl_approved,
+          'Ads Running': item.isAdRunning ? 'Yes' : 'No',
+          [`BL >= ${threshold}`]: item.bl_approved >= threshold ? 'Yes' : 'No'
+        }))
+    );
+    const adsRunningSheet = XLSX.utils.json_to_sheet(
+      adsRunningList.map(item => ({
+        [`${label} Name`]: item.name,
+        'BL Approved': item.bl_approved
+      }))
+    );
+    const qualifiedSheet = XLSX.utils.json_to_sheet(
+      qualifiedList.map(item => ({
+        [`${label} Name`]: item.name,
+        'BL Approved': item.bl_approved
+      }))
+    );
+
+    XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+    XLSX.utils.book_append_sheet(wb, allDataSheet, `All_${label}s`);
+    XLSX.utils.book_append_sheet(wb, adsRunningSheet, 'Ads_Running');
+    XLSX.utils.book_append_sheet(wb, qualifiedSheet, `BL_GTE_${threshold}`);
+
+    const weekLabel = selectedWeek || timePeriod;
+    XLSX.writeFile(
+      wb,
+      `${sanitizeFileName(label)}_diversity_${sanitizeFileName(getEntityTitle())}_${sanitizeFileName(weekLabel)}.xlsx`
+    );
   };
 
   const downloadCompareCsv = () => {
@@ -1855,7 +1919,15 @@ export default function DailyCampaignTab() {
           <div style={{ background: 'var(--bg)', color: 'var(--txt)', border: '1px solid var(--bdr)', borderRadius: '8px', padding: '20px', minWidth: '750px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: '-20px', background: 'var(--bg)', zIndex: 100, padding: '20px 20px 15px 20px', margin: '-20px -20px 15px -20px', borderBottom: '1px solid var(--bdr)' }}>
               <h3 style={{ margin: 0, color: 'var(--txt)' }}>MCAT Diversity Details</h3>
-              <button onClick={() => setShowMcatModal(false)} style={{ background: 'none', border: 'none', color: 'var(--txt)', cursor: 'pointer', fontSize: '28px', lineHeight: '1', padding: '0 5px' }}>&times;</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={() => downloadDiversityExcel('mcat')}
+                  style={{ background: 'var(--bg2)', border: '1px solid var(--bdr2)', color: 'var(--txt)', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', fontWeight: 600, padding: '8px 12px' }}
+                >
+                  Download Excel
+                </button>
+                <button onClick={() => setShowMcatModal(false)} style={{ background: 'none', border: 'none', color: 'var(--txt)', cursor: 'pointer', fontSize: '28px', lineHeight: '1', padding: '0 5px' }}>&times;</button>
+              </div>
             </div>
             {(() => {
               const adsRunningList = mcatModalData.filter(m => m.isAdRunning).sort((a,b) => b.bl_approved - a.bl_approved);
@@ -1927,7 +1999,15 @@ export default function DailyCampaignTab() {
           <div style={{ background: 'var(--bg)', color: 'var(--txt)', border: '1px solid var(--bdr)', borderRadius: '8px', padding: '20px', minWidth: '750px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: '-20px', background: 'var(--bg)', zIndex: 100, padding: '20px 20px 15px 20px', margin: '-20px -20px 15px -20px', borderBottom: '1px solid var(--bdr)' }}>
               <h3 style={{ margin: 0, color: 'var(--txt)' }}>PMCAT Diversity Details</h3>
-              <button onClick={() => setShowPmcatModal(false)} style={{ background: 'none', border: 'none', color: 'var(--txt)', cursor: 'pointer', fontSize: '28px', lineHeight: '1', padding: '0 5px' }}>&times;</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={() => downloadDiversityExcel('pmcat')}
+                  style={{ background: 'var(--bg2)', border: '1px solid var(--bdr2)', color: 'var(--txt)', cursor: 'pointer', borderRadius: '6px', fontSize: '13px', fontWeight: 600, padding: '8px 12px' }}
+                >
+                  Download Excel
+                </button>
+                <button onClick={() => setShowPmcatModal(false)} style={{ background: 'none', border: 'none', color: 'var(--txt)', cursor: 'pointer', fontSize: '28px', lineHeight: '1', padding: '0 5px' }}>&times;</button>
+              </div>
             </div>
             {(() => {
               const adsRunningList = pmcatModalData.filter(m => m.isAdRunning).sort((a,b) => b.bl_approved - a.bl_approved);

@@ -369,7 +369,7 @@ export default function WeeklyReportTab() {
               <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', textAlign: 'left', minWidth: isMobile ? `${MOBILE_METRIC_WIDTH}px` : `${DESKTOP_METRIC_WIDTH}px`, width: isMobile ? `${MOBILE_METRIC_WIDTH}px` : `${DESKTOP_METRIC_WIDTH}px`, position: 'sticky', left: 0, top: 0, background: 'var(--surf2)', zIndex: 20, whiteSpace: 'normal', wordBreak: 'break-word', boxShadow: isMobile ? '2px 0 0 var(--bdr)' : undefined }}>
                 Metric
               </th>
-              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', minWidth: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, width: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, background: 'var(--amber)', color: 'var(--bg)', position: 'sticky', left: isMobile ? `${MOBILE_METRIC_WIDTH}px` : undefined, top: 0, zIndex: isMobile ? 19 : 10, whiteSpace: 'normal', wordBreak: 'break-word', boxShadow: isMobile ? '2px 0 0 var(--bdr)' : undefined }}>
+              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', minWidth: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, width: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, background: 'var(--amber)', color: 'var(--bg)', position: isMobile ? 'static' : 'sticky', left: undefined, top: 0, zIndex: isMobile ? undefined : 10, whiteSpace: 'normal', wordBreak: 'break-word', boxShadow: undefined }}>
                 Best ever
               </th>
               {weeks.map(week => (
@@ -424,7 +424,7 @@ export default function WeeklyReportTab() {
                       )}
                       <div>{metric.label}</div>
                     </td>
-                    <td style={{ padding: '8px 12px', minWidth: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, width: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, background: isMobile ? 'var(--surf2)' : 'var(--adim)', position: isMobile ? 'sticky' : 'static', left: isMobile ? `${MOBILE_METRIC_WIDTH}px` : undefined, zIndex: isMobile ? 4 : undefined, boxShadow: isMobile ? '2px 0 0 var(--bdr)' : undefined }}>
+                    <td style={{ padding: '8px 12px', minWidth: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, width: isMobile ? `${MOBILE_BEST_WIDTH}px` : `${DESKTOP_BEST_WIDTH}px`, background: isMobile ? 'var(--adim)' : 'var(--adim)', position: 'static', left: undefined, zIndex: undefined, boxShadow: undefined }}>
                       {formatVal(reportData.bestEver[metric.key] ?? null, metric.type)}
                     </td>
                     {reportData.dataByWeek.map(entry => (

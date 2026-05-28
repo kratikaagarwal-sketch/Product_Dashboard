@@ -215,7 +215,7 @@ export async function GET(request: Request) {
         else pmcat_400_plus++;
       });
 
-      const pmcat_div_25 = denomPmcatCount > 0 ? (pmcat_ge_25 / denomPmcatCount) * 100 : 0;
+      const pmcat_div_25 = pmcat_ad_running_count > 0 ? (pmcat_ge_25 / pmcat_ad_running_count) * 100 : 0;
       const pmcat_cov_25 = pmcat_div_25;
 
       let mcat_ad_running_count = 0;
@@ -233,7 +233,7 @@ export async function GET(request: Request) {
         else mcat_gt_10_clicks++;
       });
 
-      const mcat_div_10 = denomMcatCount > 0 ? (mcat_ge_10 / denomMcatCount) * 100 : 0;
+      const mcat_div_10 = mcat_ad_running_count > 0 ? (mcat_ge_10 / mcat_ad_running_count) * 100 : 0;
 
       return {
         bl_approved: totals.bl_approved,

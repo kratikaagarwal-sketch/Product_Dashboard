@@ -35,7 +35,7 @@ const METRICS = [
 
 export default function DailyCampaignTab() {
   // Filters
-  const [timePeriod, setTimePeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [timePeriod, setTimePeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [selectedWeek, setSelectedWeek] = useState<string>('');
   const [granularity, setGranularity] = useState<'group' | 'pmcat' | 'mcat'>('mcat');
 

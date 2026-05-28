@@ -16,13 +16,42 @@ import WeeklyReportTab from "@/components/tabs/WeeklyReportTab";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 960) {
+        setIsSidebarOpen(false);
+        document.body.style.overflow = "";
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (window.innerWidth <= 960) {
+      document.body.style.overflow = isSidebarOpen ? "hidden" : "";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isSidebarOpen]);
 
   return (
     <div className="layout">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
       
       <main className="main">
-        <Topbar activeTab={activeTab} />
+        <Topbar activeTab={activeTab} onMenuClick={() => setIsSidebarOpen(true)} />
         
         <div className="cnt">
           {activeTab === "overview" && <OverviewTab />}

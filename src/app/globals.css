@@ -220,6 +220,16 @@ body {
   animation: pulse 2s ease-in-out infinite
 }
 
+.sb-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 8, 14, .55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+  z-index: 90
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
@@ -350,7 +360,8 @@ body {
 .main {
   margin-left: 230px;
   flex: 1;
-  min-width: 0
+  min-width: 0;
+  min-height: 100vh
 }
 
 .topbar {
@@ -365,21 +376,38 @@ body {
   z-index: 50
 }
 
+.topbar-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0
+}
+
+.topbar-heading {
+  min-width: 0
+}
+
 .tb-title {
   font-size: 17px;
-  font-weight: 700
+  font-weight: 700;
+  overflow-wrap: anywhere
 }
 
 .tb-sub {
   font-size: 12px;
   color: var(--muted);
-  margin-top: 1px
+  margin-top: 1px;
+  overflow-wrap: anywhere
 }
 
 .tb-right {
   display: flex;
   gap: 8px;
   align-items: center
+}
+
+.topbar-menu {
+  display: none
 }
 
 .btn {
@@ -411,7 +439,8 @@ body {
 }
 
 .cnt {
-  padding: 22px 26px
+  padding: 22px 26px;
+  min-width: 0
 }
 
 .tab {
@@ -1100,4 +1129,96 @@ body {
   background: var(--tdim);
   color: var(--teal);
   border: 1px solid rgba(0, 203, 164, .25)
+}
+
+@media (max-width: 960px) {
+  .layout {
+    display: block;
+    min-height: 100dvh
+  }
+
+  .sb {
+    width: min(82vw, 280px);
+    max-width: 280px;
+    transform: translateX(-100%);
+    transition: transform .22s ease, box-shadow .22s ease
+  }
+
+  .sb.open {
+    transform: translateX(0);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .35)
+  }
+
+  .sb-overlay.show {
+    opacity: 1;
+    pointer-events: auto
+  }
+
+  .main {
+    margin-left: 0;
+    width: 100%;
+    min-height: 100dvh
+  }
+
+  .topbar {
+    padding: 14px 16px;
+    gap: 12px;
+    flex-wrap: wrap
+  }
+
+  .topbar-main {
+    width: 100%
+  }
+
+  .topbar-menu {
+    display: inline-flex
+  }
+
+  .tb-title {
+    font-size: 15px
+  }
+
+  .tb-sub {
+    font-size: 11px
+  }
+
+  .tb-right {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap
+  }
+
+  .cnt {
+    padding: 16px 14px 24px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch
+  }
+
+  .kg {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
+  }
+
+  .hygiene-grid {
+    grid-template-columns: 1fr
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    align-items: flex-start
+  }
+
+  .tb-right {
+    justify-content: stretch
+  }
+
+  .tb-right > * {
+    flex: 1 1 140px
+  }
+
+  .tb-right > div,
+  .tb-right > button,
+  .tb-right > div > .btn {
+    width: 100%;
+  }
 }

@@ -63,13 +63,25 @@ export default function WeeklyReportTab() {
   const weeks = data?.weeks ?? [];
   const reportData = data?.reportData ?? { dataByWeek: [], bestEver: {} };
 
+  const filteredMetrics = useMemo(() => {
+    return WEEKLY_REPORT_METRICS.filter(metric => {
+      if (granularity === 'mcat') {
+        return metric.key !== 'mcat_div_10' && metric.key !== 'pmcat_div_25';
+      }
+      if (granularity === 'pmcat') {
+        return metric.key !== 'pmcat_div_25';
+      }
+      return true;
+    });
+  }, [granularity]);
+
   const sectionedMetrics = useMemo(() => {
-    return WEEKLY_REPORT_METRICS.reduce((acc, metric) => {
+    return filteredMetrics.reduce((acc, metric) => {
       if (!acc[metric.section]) acc[metric.section] = [];
       acc[metric.section].push(metric);
       return acc;
     }, {} as Record<string, typeof WEEKLY_REPORT_METRICS>);
-  }, []);
+  }, [filteredMetrics]);
 
   const formatWeekLabel = (dateStr: string) => {
     if (!dateStr) return '';
@@ -143,7 +155,7 @@ export default function WeeklyReportTab() {
     let currentSection = '';
     let sectionStart = 2;
 
-    WEEKLY_REPORT_METRICS.forEach((metric, index) => {
+    filteredMetrics.forEach((metric, index) => {
       if (metric.section !== currentSection) {
         if (currentSection !== '') {
           sectionRanges.push({ name: currentSection, startRow: sectionStart, endRow: index + 1 });
@@ -225,7 +237,7 @@ export default function WeeklyReportTab() {
         }
       }
 
-      const isLastInSection = index === WEEKLY_REPORT_METRICS.length - 1 || WEEKLY_REPORT_METRICS[index + 1].section !== metric.section;
+      const isLastInSection = index === filteredMetrics.length - 1 || filteredMetrics[index + 1].section !== metric.section;
       if (isLastInSection) {
         row.eachCell(cell => {
           cell.border = { bottom: { style: 'medium', color: { argb: 'FF888888' } } };
@@ -233,7 +245,7 @@ export default function WeeklyReportTab() {
       }
     });
 
-    sectionRanges.push({ name: currentSection, startRow: sectionStart, endRow: WEEKLY_REPORT_METRICS.length + 1 });
+    sectionRanges.push({ name: currentSection, startRow: sectionStart, endRow: filteredMetrics.length + 1 });
 
     sectionRanges.forEach(range => {
       if (range.endRow > range.startRow) {

@@ -1163,11 +1163,14 @@ body {
   .topbar {
     padding: 14px 16px;
     gap: 12px;
-    flex-wrap: wrap
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .topbar-main {
-    width: 100%
+    flex: 1;
+    min-width: 0;
   }
 
   .topbar-menu {
@@ -1180,12 +1183,6 @@ body {
 
   .tb-sub {
     font-size: 11px
-  }
-
-  .tb-right {
-    width: 100%;
-    justify-content: flex-end;
-    flex-wrap: wrap
   }
 
   .cnt {
@@ -1205,20 +1202,6 @@ body {
 
 @media (max-width: 640px) {
   .topbar {
-    align-items: flex-start
-  }
-
-  .tb-right {
-    justify-content: stretch
-  }
-
-  .tb-right > * {
-    flex: 1 1 140px
-  }
-
-  .tb-right > div,
-  .tb-right > button,
-  .tb-right > div > .btn {
-    width: 100%;
+    align-items: center;
   }
 }

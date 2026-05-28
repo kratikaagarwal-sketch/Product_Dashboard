@@ -45,10 +45,10 @@ const dailyCampaignPoolConfig = {
 };
 
 const adsRunningPoolConfig = {
-  host: 'bi-dwh-redshift-development.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
-  user: 'rd_kishalay_113578',
-  password: 'Vt4r4024J4ii',
-  database: 'biredshiftdevelopment',
+  host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
+  user: 'rd_sushmita_87494',
+  password: 'BWsxCY96G8',
+  database: 'biredshiftdb',
   port: 5439,
   ssl: { rejectUnauthorized: false },
   max: 10,
@@ -173,15 +173,24 @@ export const fetchDailyCampaignData = async (period: CampaignPeriod): Promise<Da
   }));
 };
 
-export const fetchAdsRunningMcats = async (): Promise<string[]> => {
+export type AdsRunningMcat = {
+  flag: string;
+  mcat_name: string;
+  group_name: string;
+  pmcat_name: string;
+};
+
+export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> => {
   const query = `
     SELECT 
         a.iil_google_ads_lable_name AS flag,
-        gl.glcat_mcat_name
-    FROM im_dwh_rpt.glcat_mcat_addn_attributes g
+        gl.glcat_mcat_name,
+        gl.glcat_grp_name, 
+        gl.prime_pmcat_name
+    FROM im_dwh.glcat_mcat_addn_attributes g
     JOIN im_dwh.iil_google_ads_lable_master a
         ON a.iil_google_ads_lable_master_id = g.fk_iil_google_ads_lable_master_id
-    JOIN im_dwh_rpt.dim_glcat_mcat gl
+    JOIN im_dwh.dim_glcat_mcat gl
         ON gl.glcat_mcat_id = g.fk_glcat_mcat_id
     WHERE g.fk_glcat_mcat_id IN (
         SELECT iil_eligible_mcatid 
@@ -195,5 +204,15 @@ export const fetchAdsRunningMcats = async (): Promise<string[]> => {
 
   return result.rows
     .filter(row => row.flag && validFlags.has(row.flag.toLowerCase().trim()))
-    .map(row => row.glcat_mcat_name.trim());
+    .map(row => ({
+      flag: row.flag.trim(),
+      mcat_name: row.glcat_mcat_name ? row.glcat_mcat_name.trim() : '',
+      group_name: row.glcat_grp_name ? row.glcat_grp_name.trim() : '',
+      pmcat_name: row.prime_pmcat_name ? row.prime_pmcat_name.trim() : '',
+    }));
+};
+
+export const fetchAdsRunningMcats = async (): Promise<string[]> => {
+  const data = await fetchAdsRunningMcatsEnriched();
+  return data.map(d => d.mcat_name);
 };

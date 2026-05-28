@@ -24,10 +24,10 @@ const poolConfig = {
 };
 
 const devPoolConfig = {
-  host: 'bi-dwh-redshift-development.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
-  user: 'rd_kishalay_113578',
-  password: 'Vt4r4024J4ii',
-  database: 'biredshiftdevelopment',
+  host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
+  user: 'rd_sushmita_87494',
+  password: 'BWsxCY96G8',
+  database: 'biredshiftdb',
   port: 5439,
   ssl: { rejectUnauthorized: false },
   max: 10,
@@ -88,10 +88,10 @@ SELECT
     gl.glcat_mcat_name,
     gl.glcat_grp_name,
     gl.prime_pmcat_name
-FROM im_dwh_rpt.glcat_mcat_addn_attributes g
+FROM im_dwh.glcat_mcat_addn_attributes g
 JOIN im_dwh.iil_google_ads_lable_master a
     ON a.iil_google_ads_lable_master_id = g.fk_iil_google_ads_lable_master_id
-JOIN im_dwh_rpt.dim_glcat_mcat gl
+JOIN im_dwh.dim_glcat_mcat gl
     ON gl.glcat_mcat_id = g.fk_glcat_mcat_id
 WHERE g.fk_glcat_mcat_id IN (
     SELECT iil_eligible_mcatid 

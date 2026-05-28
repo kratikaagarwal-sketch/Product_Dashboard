@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchAdsRunningMcats, fetchDailyCampaignData } from '@/lib/server/campaignData';
+import { fetchAdsRunningMcatsEnriched, fetchDailyCampaignData } from '@/lib/server/campaignData';
 import { WEEKLY_REPORT_METRICS } from '@/lib/weeklyReportMetrics';
 
 export const dynamic = 'force-dynamic';
@@ -63,13 +63,38 @@ export async function GET(request: Request) {
     const selectedPmcat = searchParams.get('selectedPmcat') || 'all';
     const selectedMcat = searchParams.get('selectedMcat') || 'all';
 
-    const [campaignRows, adsRunningMcats] = await Promise.all([
+    const [campaignRows, adsRunningMcatsEnriched] = await Promise.all([
       fetchDailyCampaignData('weekly'),
-      fetchAdsRunningMcats()
+      fetchAdsRunningMcatsEnriched()
     ]);
 
     const enrichedData = toEnrichedRows(campaignRows);
-    const adsRunningSet = new Set(adsRunningMcats.map(m => m.toLowerCase().trim()));
+    const adsRunningSet = new Set(adsRunningMcatsEnriched.map(m => m.mcat_name.toLowerCase().trim()));
+
+    // Filter master ads running list based on current filters to calculate dynamic denominators
+    let filteredAdsMcats = adsRunningMcatsEnriched;
+    if (granularity === 'group') {
+      if (selectedGroup !== 'all') {
+        filteredAdsMcats = filteredAdsMcats.filter(m => m.group_name === selectedGroup);
+      }
+    } else if (granularity === 'pmcat') {
+      if (selectedPmcat !== 'all') {
+        filteredAdsMcats = filteredAdsMcats.filter(m => m.pmcat_name === selectedPmcat);
+      } else if (selectedGroup !== 'all') {
+        filteredAdsMcats = filteredAdsMcats.filter(m => m.group_name === selectedGroup);
+      }
+    } else if (granularity === 'mcat') {
+      if (selectedMcat !== 'all') {
+        filteredAdsMcats = filteredAdsMcats.filter(m => m.mcat_name === selectedMcat);
+      } else if (selectedPmcat !== 'all') {
+        filteredAdsMcats = filteredAdsMcats.filter(m => m.pmcat_name === selectedPmcat);
+      } else if (selectedGroup !== 'all') {
+        filteredAdsMcats = filteredAdsMcats.filter(m => m.group_name === selectedGroup);
+      }
+    }
+
+    const denomMcatCount = new Set(filteredAdsMcats.map(m => m.mcat_name.toLowerCase().trim())).size;
+    const denomPmcatCount = new Set(filteredAdsMcats.map(m => m.pmcat_name.toLowerCase().trim())).size;
 
     const availableGroups = Array.from(new Set(enrichedData.map(d => d.group))).sort();
 
@@ -190,8 +215,8 @@ export async function GET(request: Request) {
         else pmcat_400_plus++;
       });
 
-      const pmcat_div_25 = pmcat_ad_running_count > 0 ? (pmcat_ge_25 / pmcat_ad_running_count) * 100 : 0;
-      const pmcat_cov_25 = pmcat_ad_running_count > 0 ? pmcat_div_25 : 0;
+      const pmcat_div_25 = denomPmcatCount > 0 ? (pmcat_ge_25 / denomPmcatCount) * 100 : 0;
+      const pmcat_cov_25 = pmcat_div_25;
 
       let mcat_ad_running_count = 0;
       let mcat_ge_10 = 0;
@@ -208,7 +233,7 @@ export async function GET(request: Request) {
         else mcat_gt_10_clicks++;
       });
 
-      const mcat_div_10 = mcat_ad_running_count > 0 ? (mcat_ge_10 / mcat_ad_running_count) * 100 : 0;
+      const mcat_div_10 = denomMcatCount > 0 ? (mcat_ge_10 / denomMcatCount) * 100 : 0;
 
       return {
         bl_approved: totals.bl_approved,

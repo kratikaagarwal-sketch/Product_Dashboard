@@ -15,7 +15,7 @@ import DailyCampaignTab from "@/components/tabs/DailyCampaignTab";
 import WeeklyReportTab from "@/components/tabs/WeeklyReportTab";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("weekly_report");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {

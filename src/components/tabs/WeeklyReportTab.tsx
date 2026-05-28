@@ -60,6 +60,7 @@ export default function WeeklyReportTab() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   const [adsRunningMcats, setAdsRunningMcats] = useState<string[]>([]);
   const [adsRunningLoading, setAdsRunningLoading] = useState(true);
@@ -99,6 +100,15 @@ export default function WeeklyReportTab() {
         console.error(err);
         setAdsRunningLoading(false);
       });
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    const updateIsMobile = () => setIsMobile(mediaQuery.matches);
+
+    updateIsMobile();
+    mediaQuery.addEventListener('change', updateIsMobile);
+    return () => mediaQuery.removeEventListener('change', updateIsMobile);
   }, []);
 
   const adsRunningSet = useMemo(() => new Set(adsRunningMcats.map(m => m.toLowerCase().trim())), [adsRunningMcats]);
@@ -675,7 +685,7 @@ export default function WeeklyReportTab() {
       </div>
 
       {/* Title & Download */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Weekly Performance - {getEntityTitle()}</h2>
         <button 
             onClick={downloadExcel}
@@ -689,18 +699,20 @@ export default function WeeklyReportTab() {
 
       {/* Table Container */}
       <div style={{ overflowX: 'auto', border: '1px solid var(--bdr)', borderRadius: '8px', background: 'var(--bg)', width: '100%', maxHeight: 'calc(100vh - 250px)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'right' }}>
+        <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'right' }}>
           <thead>
             <tr style={{ background: 'var(--surf2)' }}>
-              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', textAlign: 'left', minWidth: '150px', position: 'sticky', left: 0, top: 0, background: 'var(--surf2)', zIndex: 20 }}>Section</th>
-              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', textAlign: 'left', minWidth: '200px', position: 'sticky', left: '150px', top: 0, background: 'var(--surf2)', zIndex: 20 }}>Metric</th>
-              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', background: 'var(--amber)', color: 'var(--bg)', position: 'sticky', top: 0, zIndex: 10 }}>Best ever</th>
+              {!isMobile && (
+                <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', textAlign: 'left', minWidth: '150px', position: 'sticky', left: 0, top: 0, background: 'var(--surf2)', zIndex: 20 }}>Section</th>
+              )}
+              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', textAlign: 'left', minWidth: isMobile ? '180px' : '200px', position: 'sticky', left: 0, top: 0, background: 'var(--surf2)', zIndex: 20 }}>Metric</th>
+              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', minWidth: isMobile ? '110px' : '120px', background: 'var(--amber)', color: 'var(--bg)', position: 'sticky', top: 0, zIndex: 10 }}>Best ever</th>
               {weeks.map(w => (
-                <th key={w} style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', minWidth: '120px', background: 'var(--blue)', color: 'var(--bg)', position: 'sticky', top: 0, zIndex: 10 }}>
+                <th key={w} style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', minWidth: isMobile ? '110px' : '120px', background: 'var(--blue)', color: 'var(--bg)', position: 'sticky', top: 0, zIndex: 10 }}>
                   {formatWeekLabel(w)}
                 </th>
               ))}
-              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', background: 'var(--surf2)', position: 'sticky', top: 0, zIndex: 10 }}>delta % (+/- LW)</th>
+              <th style={{ padding: '12px', borderBottom: '1px solid var(--bdr)', minWidth: isMobile ? '110px' : '120px', background: 'var(--surf2)', position: 'sticky', top: 0, zIndex: 10 }}>delta % (+/- LW)</th>
             </tr>
           </thead>
           <tbody>
@@ -734,23 +746,28 @@ export default function WeeklyReportTab() {
 
                  return (
                    <tr key={m.key} style={{ borderBottom: isLastInSection ? '2px solid var(--bdr)' : '1px solid var(--bdr)' }}>
-                     {isFirstInSection && (
+                     {!isMobile && isFirstInSection && (
                        <td rowSpan={metrics.length} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold', background: 'var(--surf3)', position: 'sticky', left: 0, zIndex: 5, verticalAlign: 'top', borderRight: '1px solid var(--bdr)' }}>
                          {sectionName}
                        </td>
                      )}
-                     <td style={{ padding: '8px 12px', textAlign: 'left', position: 'sticky', left: '150px', background: 'var(--surf)', zIndex: 5, borderRight: '1px solid var(--bdr)' }}>
-                       {m.label}
+                     <td style={{ padding: '8px 12px', textAlign: 'left', position: 'sticky', left: 0, background: 'var(--surf)', zIndex: 5, borderRight: '1px solid var(--bdr)', minWidth: isMobile ? '180px' : '200px' }}>
+                       {isMobile && isFirstInSection && (
+                         <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--teal)', marginBottom: '6px' }}>
+                           {sectionName}
+                         </div>
+                       )}
+                       <div>{m.label}</div>
                      </td>
-                     <td style={{ padding: '8px 12px', background: 'var(--adim)' }}>
+                     <td style={{ padding: '8px 12px', minWidth: isMobile ? '110px' : '120px', background: 'var(--adim)' }}>
                        {formatVal(reportData.bestEver[m.key], m.type)}
                      </td>
                      {reportData.dataByWeek.map(d => (
-                       <td key={d.week} style={{ padding: '8px 12px' }}>
+                       <td key={d.week} style={{ padding: '8px 12px', minWidth: isMobile ? '110px' : '120px' }}>
                          {formatVal((d.stats as any)[m.key], m.type)}
                        </td>
                      ))}
-                     <td style={{ padding: '8px 12px', fontWeight: 'bold', color: deltaColor, background: 'var(--surf2)' }}>
+                     <td style={{ padding: '8px 12px', minWidth: isMobile ? '110px' : '120px', fontWeight: 'bold', color: deltaColor, background: 'var(--surf2)' }}>
                        {deltaStr}
                      </td>
                    </tr>

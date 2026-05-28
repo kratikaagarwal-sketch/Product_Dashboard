@@ -1,7 +1,6 @@
 "use client";
 
 import React from 'react';
-import { TITLES } from '@/lib/constants';
 
 interface SidebarProps {
   activeTab: string;
@@ -18,13 +17,9 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: Si
   ];
 
   const intelligenceItems = [
-    { id: 'overview', icon: '📊', label: 'Overview' },
-    { id: 'google', icon: '📢', label: 'Google Ads' },
     { id: 'bl', icon: '💼', label: 'Business Leads' },
-    { id: 'traffic_enquiry', icon: '🌐', label: 'Traffic & Enquiries' },
     { id: 'mcat', icon: '⏸️', label: 'MCAT Pause' },
     { id: 'hygiene', icon: '🧼', label: 'Feed Hygiene' },
-    { id: 'diversity', icon: '🌈', label: 'Category Diversity' },
   ];
 
   const handleTabClick = (id: string) => {
@@ -45,7 +40,7 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: Si
         </div>
 
         <nav className="sb-nav">
-          <div className="sb-sec">Campaign Detail</div>
+          <div className="sb-sec">Reporting & Analytics - Live</div>
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -57,7 +52,7 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: Si
             </button>
           ))}
 
-          <div className="sb-sec" style={{ marginTop: '18px' }}>Intelligence</div>
+          <div className="sb-sec" style={{ marginTop: '18px' }}>Beta Views</div>
           {intelligenceItems.map((item) => (
             <button
               key={item.id}

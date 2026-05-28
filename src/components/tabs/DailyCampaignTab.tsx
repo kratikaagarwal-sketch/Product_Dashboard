@@ -8,6 +8,8 @@ import { useCachedApiData } from '@/lib/clientApiCache';
 
 const C = { t: '#00cba4', b: '#4d9fff', g: '#3dd68c', r: '#ff6168', a: '#ffb547', p: '#a78bfa', d: '#4a6070' };
 
+// metrix 
+
 const METRICS = [
   { key: 'impressions', label: 'Impressions' },
   { key: 'clicks', label: 'Clicks' },

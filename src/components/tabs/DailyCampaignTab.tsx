@@ -30,8 +30,7 @@ const METRICS = [
   { key: 'blni_approved_pct', label: 'BLNI / Appr. %' },
   { key: 'enq_approved', label: 'Enq Approved' },
   { key: 'calls_approved', label: 'Calls Approved' },
-  { key: 'total_req_approved', label: 'Total Req Approved' },
-  { key: 'unq_purchaser', label: 'Unq Purchaser' }
+  { key: 'total_req_approved', label: 'Total Req Approved' }
 ];
 
 export default function DailyCampaignTab() {
@@ -947,9 +946,9 @@ export default function DailyCampaignTab() {
       filename = `mcat_performance_${timePeriod}_${selectedWeek}.csv`;
     }
 
-    let headers = ['Group Name', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
-    if (granularity === 'pmcat') headers = ['PMCAT', 'Parent Group', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
-    if (granularity === 'mcat') headers = ['MCAT', 'Parent PMCAT', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved', 'Unq Purchaser'];
+    let headers = ['Group Name', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved'];
+    if (granularity === 'pmcat') headers = ['PMCAT', 'Parent Group', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved'];
+    if (granularity === 'mcat') headers = ['MCAT', 'Parent PMCAT', 'Impressions', 'Clicks', 'CTR %', 'Cost', 'Conversions', 'CPC', 'Cost/Conv', 'BL Approved', 'BL Sold', 'Txn', 'Cost/BL', 'Txn (Appr) %', 'BL Sold %', 'Cost / Txn', 'MCAT Div.', 'PMCAT Div.', 'BLNI', 'BLNI / Txn %', 'BLNI / Appr. %', 'Enq Approved', 'Calls Approved', 'Total Req Approved'];
 
     const dataToDownload = (granularity === 'group' ? groupPerformanceData : (granularity === 'pmcat' ? pmcatPerformanceData : mcatPerformanceData));
     if (!dataToDownload) return;
@@ -978,8 +977,7 @@ export default function DailyCampaignTab() {
         row.blni_approved_pct,
         row.enq_approved,
         row.calls_approved,
-        row.total_req_approved,
-        row.unq_purchaser
+        row.total_req_approved
       ].filter(v => v !== null);
       csv += rowData.join(',') + '\n';
     });
@@ -1006,8 +1004,7 @@ export default function DailyCampaignTab() {
       dataToDownload.totals.blni_approved_pct,
       dataToDownload.totals.enq_approved,
       dataToDownload.totals.calls_approved,
-      dataToDownload.totals.total_req_approved,
-      dataToDownload.totals.unq_purchaser
+      dataToDownload.totals.total_req_approved
     ].filter(v => v !== null);
     csv += totalsRow.join(',') + '\n';
 
@@ -1366,7 +1363,6 @@ export default function DailyCampaignTab() {
                     <div><div className="bn-val" style={{ color: '#4dd0e1' }}>{formatVal(kpiStats.enq_approved, 'enq_approved')}</div><div className="bn-lbl">Enq Approved</div></div>
                     <div><div className="bn-val" style={{ color: '#81c784' }}>{formatVal(kpiStats.calls_approved, 'calls_approved')}</div><div className="bn-lbl">Calls Approved</div></div>
                     <div><div className="bn-val" style={{ color: '#ba68c8' }}>{formatVal(kpiStats.total_req_approved, 'total_req_approved')}</div><div className="bn-lbl">Total Req Appr.</div></div>
-                    <div><div className="bn-val" style={{ color: '#a1887f' }}>{formatVal(kpiStats.unq_purchaser, 'unq_purchaser')}</div><div className="bn-lbl">Unq Purchaser</div></div>
                   </div>
                 </div>
               </div>
@@ -1586,7 +1582,6 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1629,7 +1624,6 @@ export default function DailyCampaignTab() {
                         <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
                         <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
                         <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
-                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
                     <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
@@ -1656,7 +1650,6 @@ export default function DailyCampaignTab() {
                       <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.enq_approved, 'enq_approved')}</td>
                       <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.calls_approved, 'calls_approved')}</td>
                       <td className="num" style={{ color: '#ba68c8', position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
-                      <td className="num" style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40 }}>{formatVal(groupPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1706,7 +1699,6 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1744,7 +1736,6 @@ export default function DailyCampaignTab() {
                         <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
                         <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
                         <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
-                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
                     <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
@@ -1771,7 +1762,6 @@ export default function DailyCampaignTab() {
                       <td className="num">{formatVal(pmcatPerformanceData.totals.enq_approved, 'enq_approved')}</td>
                       <td className="num">{formatVal(pmcatPerformanceData.totals.calls_approved, 'calls_approved')}</td>
                       <td className="num" style={{ color: '#ba68c8' }}>{formatVal(pmcatPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
-                      <td className="num">{formatVal(pmcatPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1821,7 +1811,6 @@ export default function DailyCampaignTab() {
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Enq Appr.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Calls Appr.</th>
                       <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Total Req Appr.</th>
-                      <th className="num" style={{ position: 'sticky', top: 0, background: 'var(--bg2)', zIndex: 10, fontWeight: 'bold', borderBottom: '1px solid var(--bdr2)' }}>Unq Purch.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1854,7 +1843,6 @@ export default function DailyCampaignTab() {
                         <td className="num">{formatVal(row.enq_approved, 'enq_approved')}</td>
                         <td className="num">{formatVal(row.calls_approved, 'calls_approved')}</td>
                         <td className="num" style={{ color: '#ba68c8' }}>{formatVal(row.total_req_approved, 'total_req_approved')}</td>
-                        <td className="num">{formatVal(row.unq_purchaser, 'unq_purchaser')}</td>
                       </tr>
                     ))}
                     <tr style={{ position: 'sticky', bottom: 0, background: 'var(--bg2)', zIndex: 40, fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.15)' }}>
@@ -1881,7 +1869,6 @@ export default function DailyCampaignTab() {
                       <td className="num">{formatVal(mcatPerformanceData.totals.enq_approved, 'enq_approved')}</td>
                       <td className="num">{formatVal(mcatPerformanceData.totals.calls_approved, 'calls_approved')}</td>
                       <td className="num" style={{ color: '#ba68c8' }}>{formatVal(mcatPerformanceData.totals.total_req_approved, 'total_req_approved')}</td>
-                      <td className="num">{formatVal(mcatPerformanceData.totals.unq_purchaser, 'unq_purchaser')}</td>
                     </tr>
                   </tbody>
                 </table>

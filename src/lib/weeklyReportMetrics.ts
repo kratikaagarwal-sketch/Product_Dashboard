@@ -9,6 +9,7 @@ export const WEEKLY_REPORT_METRICS: WeeklyMetric[] = [
   { section: 'summary', key: 'bl_approved', label: 'BL Approved', type: 'number' },
   { section: 'summary', key: 'cost_per_bl', label: 'Cost/BL Approved', type: 'currency' },
   { section: 'summary', key: 'cost_per_txn', label: 'Cost/Transaction', type: 'currency' },
+  { section: 'summary', key: 'bl_sold_pct', label: 'Unique Sold %', type: 'percent' },
   { section: 'summary', key: 'txn_pct', label: 'Transaction %', type: 'percent' },
   { section: 'summary', key: 'blni_txn_pct', label: 'BLNI/Transaction %', type: 'percent' },
   { section: 'summary', key: 'total_cost', label: 'Total Cost', type: 'currency' },
@@ -37,7 +38,6 @@ export const WEEKLY_REPORT_METRICS: WeeklyMetric[] = [
   { section: 'DB Report', key: 'blni', label: 'BLNI', type: 'number' },
   { section: 'DB Report', key: 'blni_appr_pct', label: 'BLNI/ Approved %', type: 'percent' },
   { section: 'DB Report', key: 'blni_txn_pct', label: 'BLNI/ Transaction %', type: 'percent' },
-  { section: 'DB Report', key: 'unique_purchaser', label: 'Unique Purchaser', type: 'number' },
 
   { section: 'Total PMCATs', key: 'pmcat_count', label: 'PMCAT Count (Ad running)', type: 'number' },
   { section: 'Total PMCATs', key: 'pmcat_div_25', label: 'Total PMCATs with >25 BLs', type: 'number' },

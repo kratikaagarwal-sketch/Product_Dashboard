@@ -244,7 +244,7 @@ ORDER BY 1 DESC, 2;
         week_start_date: weekStr,
         mcat: mcatName,
         group: 'Unknown Group',
-        pmcat: 'Unknown PMCAT',
+        pmcat: mcatName,
         clicks,
         impressions,
         cost, // fallback to raw ads cost
@@ -279,13 +279,13 @@ ORDER BY 1 DESC, 2;
         existing.blni = blni;
         existing.cost = cost; // Overwrite with campaign table cost
         existing.group = row.group_name || 'Unknown Group';
-        existing.pmcat = row.pmcat_name || 'Unknown PMCAT';
+        existing.pmcat = row.pmcat_name || mcatName;
       } else {
         mergedMap.set(key, {
           week_start_date: weekStr,
           mcat: mcatName,
           group: row.group_name || 'Unknown Group',
-          pmcat: row.pmcat_name || 'Unknown PMCAT',
+          pmcat: row.pmcat_name || mcatName,
           clicks: 0,
           impressions: 0,
           cost, // Set campaign cost
@@ -322,7 +322,11 @@ ORDER BY 1 DESC, 2;
     const adsRunningMcats = res4.rows.map(row => ({
       mcat: row.glcat_mcat_name || 'Unknown',
       group: row.glcat_grp_name || 'Unknown Group',
-      pmcat: row.prime_pmcat_name || 'Unknown PMCAT'
+      pmcat: (row.prime_pmcat_name && String(row.prime_pmcat_name).trim())
+        ? String(row.prime_pmcat_name).trim()
+        : (row.glcat_mcat_name && String(row.glcat_mcat_name).trim())
+          ? String(row.glcat_mcat_name).trim()
+          : 'Unknown PMCAT'
     }));
     debugLog(`res4 mapping complete. adsRunningMcats count: ${adsRunningMcats.length}`);
 

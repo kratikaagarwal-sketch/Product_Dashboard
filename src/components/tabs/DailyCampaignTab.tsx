@@ -105,7 +105,7 @@ export default function DailyCampaignTab() {
         ...d,
         mcat: d.mcat_name || 'Unknown',
         group: d.group_name || 'Unknown Group',
-        pmcat: d.pmcat_name || 'Unknown PMCAT',
+        pmcat: d.pmcat_name || d.mcat_name || 'Unknown PMCAT',
         clicks: d.total_clicks || 0,
         impressions: d.total_impressions || 0,
         cost: d.total_cost_inr || 0,
@@ -657,7 +657,7 @@ export default function DailyCampaignTab() {
       if (!rolledUp.has(key)) {
         rolledUp.set(key, {
           name: key,
-          pmcat: d.pmcat || 'Unknown PMCAT',
+          pmcat: d.pmcat || d.mcat || 'Unknown PMCAT',
           clicks: 0,
           impressions: 0,
           cost: 0,

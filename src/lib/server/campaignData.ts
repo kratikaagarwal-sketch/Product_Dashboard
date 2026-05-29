@@ -176,7 +176,7 @@ export const fetchDailyCampaignData = async (period: CampaignPeriod): Promise<Da
     week_start_date: extractDateString(row.week_start_date),
     mcat_name: row.mcat_name || 'Unknown MCAT',
     group_name: row.group_name || 'Unknown Group',
-    pmcat_name: row.pmcat_name || 'Unknown PMCAT',
+    pmcat_name: row.pmcat_name || row.mcat_name || 'Unknown PMCAT',
     bl_sold_approved: parseInt(row.bl_sold_approved, 10) || 0,
     bl_approved: parseInt(row.bl_approved, 10) || 0,
     bl_txn_approved: parseInt(row.bl_txn_approved, 10) || 0,
@@ -270,7 +270,7 @@ export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> 
         flag: String(row.iil_google_ads_lable_name).trim(),
         mcat_name: names.mcat || '',
         group_name: names.group || '',
-        pmcat_name: names.pmcat || ''
+        pmcat_name: names.pmcat || names.mcat || ''
       } as AdsRunningMcat;
     })
     .filter(r => r.flag && validFlags.has(r.flag.toLowerCase()));

@@ -96,6 +96,9 @@ export async function GET(request: Request) {
     const denomMcatCount = new Set(filteredAdsMcats.map(m => m.mcat_name.toLowerCase().trim())).size;
     const denomPmcatCount = new Set(filteredAdsMcats.map(m => m.pmcat_name.toLowerCase().trim())).size;
 
+    const filteredAdsMcatsSet = new Set(filteredAdsMcats.map(m => m.mcat_name.toLowerCase().trim()));
+    const filteredAdsPmcatsSet = new Set(filteredAdsMcats.map(m => m.pmcat_name.toLowerCase().trim()));
+
     const availableGroups = Array.from(new Set(enrichedData.map(d => d.group))).sort();
 
     let pmcatSource = enrichedData;
@@ -149,6 +152,17 @@ export async function GET(request: Request) {
       const pmcatMap = new Map<string, { bl_approved: number; impressions: number; isAdRunning: boolean }>();
       const mcatMap = new Map<string, { clicks: number; bl_approved: number; isAdRunning: boolean }>();
 
+      // Pre-initialize with master running categories matching active filters so that
+      // those with 0 BLs are present in the Map.
+      filteredAdsMcats.forEach(m => {
+        if (m.pmcat_name && !pmcatMap.has(m.pmcat_name)) {
+          pmcatMap.set(m.pmcat_name, { bl_approved: 0, impressions: 0, isAdRunning: true });
+        }
+        if (m.mcat_name && !mcatMap.has(m.mcat_name)) {
+          mcatMap.set(m.mcat_name, { clicks: 0, bl_approved: 0, isAdRunning: true });
+        }
+      });
+
       weekData.forEach(d => {
         totals.bl_approved += d.bl_approved;
         totals.bl_approved_sender += d.fenq_bl_senders + d.intent_bl_senders + d.direct_bl_senders + d.flpns_bl_senders + d.whatsapp_bl_senders;
@@ -167,7 +181,7 @@ export async function GET(request: Request) {
         const isMcatAdRunning = adsRunningSet.has(mcatKey);
 
         if (!pmcatMap.has(d.pmcat)) {
-          pmcatMap.set(d.pmcat, { bl_approved: 0, impressions: 0, isAdRunning: false });
+          pmcatMap.set(d.pmcat, { bl_approved: 0, impressions: 0, isAdRunning: isMcatAdRunning });
         }
         const pmcatEntry = pmcatMap.get(d.pmcat)!;
         pmcatEntry.bl_approved += d.bl_approved;
@@ -195,8 +209,6 @@ export async function GET(request: Request) {
       const total_req_approved = totals.enq_approved + totals.total_calls + totals.bl_approved;
       const blni_appr_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
 
-      let pmcat_ad_running_count = 0;
-      let pmcat_ge_25 = 0;
       let pmcat_0_5 = 0;
       let pmcat_5_25 = 0;
       let pmcat_25_100 = 0;
@@ -205,8 +217,6 @@ export async function GET(request: Request) {
       let pmcat_400_plus = 0;
 
       pmcatMap.forEach(val => {
-        if (val.isAdRunning) pmcat_ad_running_count++;
-        if (val.bl_approved >= 25) pmcat_ge_25++;
         if (val.bl_approved >= 0 && val.bl_approved < 5) pmcat_0_5++;
         else if (val.bl_approved < 25) pmcat_5_25++;
         else if (val.bl_approved < 100) pmcat_25_100++;
@@ -215,25 +225,37 @@ export async function GET(request: Request) {
         else pmcat_400_plus++;
       });
 
-      const pmcat_div_25 = pmcat_ad_running_count > 0 ? (pmcat_ge_25 / pmcat_ad_running_count) * 100 : 0;
-      const pmcat_cov_25 = pmcat_div_25;
-
-      let mcat_ad_running_count = 0;
-      let mcat_ge_10 = 0;
       let mcat_0_clicks = 0;
       let mcat_1_10_clicks = 0;
       let mcat_gt_10_clicks = 0;
 
       mcatMap.forEach(val => {
-        if (val.isAdRunning) mcat_ad_running_count++;
-        if (val.bl_approved >= 10) mcat_ge_10++;
-
         if (val.clicks === 0) mcat_0_clicks++;
         else if (val.clicks <= 10) mcat_1_10_clicks++;
         else mcat_gt_10_clicks++;
       });
 
-      const mcat_div_10 = mcat_ad_running_count > 0 ? (mcat_ge_10 / mcat_ad_running_count) * 100 : 0;
+      // Calculate numerators using master ads running Sets
+      let numMcatGe10 = 0;
+      let numPmcatGe25 = 0;
+
+      mcatMap.forEach((val, key) => {
+        const k = key.toLowerCase().trim();
+        if (filteredAdsMcatsSet.has(k) && val.bl_approved >= 10) {
+          numMcatGe10++;
+        }
+      });
+
+      pmcatMap.forEach((val, key) => {
+        const k = key.toLowerCase().trim();
+        if (filteredAdsPmcatsSet.has(k) && val.bl_approved >= 25) {
+          numPmcatGe25++;
+        }
+      });
+
+      const pmcat_div_25 = denomPmcatCount > 0 ? (numPmcatGe25 / denomPmcatCount) * 100 : 0;
+      const pmcat_cov_25 = pmcat_div_25;
+      const mcat_div_10 = denomMcatCount > 0 ? (numMcatGe10 / denomMcatCount) * 100 : 0;
 
       return {
         bl_approved: totals.bl_approved,
@@ -260,7 +282,7 @@ export async function GET(request: Request) {
         blni: totals.blni,
         blni_appr_pct,
         unique_purchaser: totals.unique_purchaser,
-        pmcat_count: pmcat_ad_running_count,
+        pmcat_count: denomPmcatCount,
         pmcat_cov_25,
         pmcat_0_5,
         pmcat_5_25,

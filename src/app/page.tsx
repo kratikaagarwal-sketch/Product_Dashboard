@@ -58,7 +58,7 @@ export default function Home() {
       // Campaign tab — match retryCount=0 suffix used by DailyCampaignTab
       prefetchCachedApiData<any[]>("daily-campaign:daily:0", "/api/daily-campaign?period=daily", FIVE_MIN);
       prefetchCachedApiData<any[]>("daily-campaign:weekly:0", "/api/daily-campaign?period=weekly", FIVE_MIN);
-      prefetchCachedApiData<string[]>("ads-running-mcats", "/api/ads-running-mcats", FIVE_MIN);
+      prefetchCachedApiData<any[]>("ads-running-mcats", "/api/ads-running-mcats", FIVE_MIN);
       // Weekly report — pre-warm the default view (group granularity, all filters, retryCount=0)
       const defaultWRParams = 'granularity=group&selectedGroup=all&selectedPmcat=all&selectedMcat=all';
       prefetchCachedApiData<any>(`weekly-report:${defaultWRParams}:0`, `/api/weekly-report?${defaultWRParams}`, FIVE_MIN);

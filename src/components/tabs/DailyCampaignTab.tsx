@@ -85,7 +85,18 @@ export default function DailyCampaignTab() {
 
   const data = campaignData ?? [];
   const adsRunningMcats = adsRunningMcatsData ?? [];
-  const adsRunningSet = useMemo(() => new Set(adsRunningMcats.map(m => m.toLowerCase().trim())), [adsRunningMcats]);
+  const adsRunningSet = useMemo(() => {
+    const validFlags = new Set(['high', 'medium', 'low']);
+    return new Set(adsRunningMcats
+      .map((m: any) => {
+        if (typeof m === 'string') return m.toLowerCase().trim();
+        const flag = (m.flag || '').toString().toLowerCase().trim();
+        if (!validFlags.has(flag)) return '';
+        return (m.mcat_name || m.mcat || '').toLowerCase().trim();
+      })
+      .filter((x: string) => !!x)
+    );
+  }, [adsRunningMcats]);
 
   // Enrich data for Group, PMCAT, MCAT directly from the query
   const enrichedData = useMemo(() => {
@@ -174,35 +185,68 @@ export default function DailyCampaignTab() {
     totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
 
     if (timePeriod === 'weekly') {
+      const cleanStr = (s: any) => (s || '').toLowerCase().trim();
+
+      let filteredAds = adsRunningMcats;
+      if (selectedGroup !== 'all') {
+        const gClean = cleanStr(selectedGroup);
+        filteredAds = filteredAds.filter((m: any) => cleanStr(m.group_name || m.group) === gClean);
+      }
+      if (granularity !== 'group' && selectedPmcat !== 'all') {
+        const pClean = cleanStr(selectedPmcat);
+        filteredAds = filteredAds.filter((m: any) => cleanStr(m.pmcat_name || m.pmcat) === pClean);
+      }
+      if (granularity === 'mcat' && selectedMcat !== 'all') {
+        const mClean = cleanStr(selectedMcat);
+        filteredAds = filteredAds.filter((m: any) => cleanStr(m.mcat_name || m.mcat) === mClean);
+      }
+
+      const denomMcatCount = new Set(filteredAds.map((m: any) => cleanStr(m.mcat_name || m.mcat))).size;
+      const denomPmcatCount = new Set(filteredAds.map((m: any) => cleanStr(m.pmcat_name || m.pmcat))).size;
+
       const pmcatMap = new Map();
       const mcatMap = new Map();
+
+      filteredAds.forEach((m: any) => {
+        const pmKey = m.pmcat_name || m.pmcat;
+        if (pmKey && !pmcatMap.has(pmKey)) {
+          pmcatMap.set(pmKey, { bl_approved: 0, isAdRunning: true });
+        }
+        const mcKey = m.mcat_name || m.mcat;
+        if (mcKey && !mcatMap.has(mcKey)) {
+          mcatMap.set(mcKey, { bl_approved: 0, isAdRunning: true });
+        }
+      });
+
       filtered.forEach(d => {
         if (!d.mcat) return;
-        const mcatKey = d.mcat.toLowerCase().trim();
+        const mcatKey = cleanStr(d.mcat);
         const isAdRunning = adsRunningSet.has(mcatKey);
 
-        if (!pmcatMap.has(d.pmcat)) pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: false });
+        if (!pmcatMap.has(d.pmcat)) {
+          pmcatMap.set(d.pmcat, { bl_approved: 0, isAdRunning: isAdRunning });
+        }
         pmcatMap.get(d.pmcat).bl_approved += d.bl_approved || 0;
         if (isAdRunning) pmcatMap.get(d.pmcat).isAdRunning = true;
 
-        if (!mcatMap.has(d.mcat)) mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        if (!mcatMap.has(d.mcat)) {
+          mcatMap.set(d.mcat, { bl_approved: 0, isAdRunning });
+        }
         mcatMap.get(d.mcat).bl_approved += d.bl_approved || 0;
       });
 
-      let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
-      pmcatMap.forEach(v => {
-        if (v.isAdRunning) pmcat_ad_running++;
-        if (v.bl_approved >= 25) pmcat_ge_25++;
+      let numMcatGe10 = 0;
+      mcatMap.forEach((v: any) => {
+        if (v.isAdRunning && v.bl_approved >= 10) numMcatGe10++;
       });
 
-      let mcat_ad_running = 0; let mcat_ge_10 = 0;
-      mcatMap.forEach(v => {
-        if (v.isAdRunning) mcat_ad_running++;
-        if (v.bl_approved >= 10) mcat_ge_10++;
+      let numPmcatGe25 = 0;
+      pmcatMap.forEach((v: any) => {
+        if (v.isAdRunning && v.bl_approved >= 25) numPmcatGe25++;
       });
 
-      totals.mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
-      totals.pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+      totals.mcat_div = denomMcatCount > 0 ? (numMcatGe10 / denomMcatCount) * 100 : 0;
+      totals.pmcat_div = denomPmcatCount > 0 ? (numPmcatGe25 / denomPmcatCount) * 100 : 0;
       totals.mcatMap = mcatMap;
       totals.pmcatMap = pmcatMap;
     } else {
@@ -277,21 +321,57 @@ export default function DailyCampaignTab() {
     const rows = Array.from(rolledUp.values()).map(d => {
       let mcat_div = null;
       let pmcat_div = null;
+      let groupMcatMap = d.mcatMap;
+      let groupPmcatMap = d.pmcatMap;
 
       if (timePeriod === 'weekly') {
-        let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
-        d.pmcatMap.forEach((v: any) => {
-          if (v.isAdRunning) pmcat_ad_running++;
-          if (v.bl_approved >= 25) pmcat_ge_25++;
-        });
-        pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
+        const cleanStr = (s: any) => (s || '').toLowerCase().trim();
+        const groupName = d.name;
+        const gClean = cleanStr(groupName);
 
-        let mcat_ad_running = 0; let mcat_ge_10 = 0;
-        d.mcatMap.forEach((v: any) => {
-          if (v.isAdRunning) mcat_ad_running++;
-          if (v.bl_approved >= 10) mcat_ge_10++;
+        // Filter master ads running list for this specific group row
+        const groupAds = adsRunningMcats.filter((m: any) => cleanStr(m.group_name || m.group) === gClean);
+        const denomMcat = new Set(groupAds.map((m: any) => cleanStr(m.mcat_name || m.mcat))).size;
+        const denomPmcat = new Set(groupAds.map((m: any) => cleanStr(m.pmcat_name || m.pmcat))).size;
+
+        groupMcatMap = new Map();
+        groupPmcatMap = new Map();
+
+        // Initialize with master running ads for this group
+        groupAds.forEach((m: any) => {
+          const mcatName = m.mcat_name || m.mcat;
+          if (mcatName) groupMcatMap.set(mcatName, { bl_approved: 0, isAdRunning: true });
+          const pmcatName = m.pmcat_name || m.pmcat;
+          if (pmcatName) groupPmcatMap.set(pmcatName, { bl_approved: 0, isAdRunning: true });
         });
-        mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
+
+        // Add campaign week actual data
+        d.mcatMap.forEach((v: any, k: string) => {
+          if (!groupMcatMap.has(k)) {
+            groupMcatMap.set(k, { bl_approved: 0, isAdRunning: false });
+          }
+          groupMcatMap.get(k).bl_approved += v.bl_approved;
+        });
+
+        d.pmcatMap.forEach((v: any, k: string) => {
+          if (!groupPmcatMap.has(k)) {
+            groupPmcatMap.set(k, { bl_approved: 0, isAdRunning: false });
+          }
+          groupPmcatMap.get(k).bl_approved += v.bl_approved;
+        });
+
+        let numMcatGe10 = 0;
+        groupMcatMap.forEach((v: any) => {
+          if (v.isAdRunning && v.bl_approved >= 10) numMcatGe10++;
+        });
+
+        let numPmcatGe25 = 0;
+        groupPmcatMap.forEach((v: any) => {
+          if (v.isAdRunning && v.bl_approved >= 25) numPmcatGe25++;
+        });
+
+        mcat_div = denomMcat > 0 ? (numMcatGe10 / denomMcat) * 100 : 0;
+        pmcat_div = denomPmcat > 0 ? (numPmcatGe25 / denomPmcat) * 100 : 0;
       }
 
       return {
@@ -306,13 +386,11 @@ export default function DailyCampaignTab() {
         blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
         blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
         total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved,
+        mcatMap: groupMcatMap,
+        pmcatMap: groupPmcatMap,
         mcat_div,
         pmcat_div
       };
-    }).map(r => {
-      // remove internal maps from final row
-      const { mcatMap, pmcatMap, ...out } = r as any;
-      return out;
     });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -440,21 +518,47 @@ export default function DailyCampaignTab() {
     const rows = Array.from(rolledUp.values()).map(d => {
       let mcat_div = null;
       let pmcat_div = null;
+      let pmcatMcatMap = d.mcatMap;
+      let pmcatPmcatMap = d.pmcatMap;
 
       if (timePeriod === 'weekly') {
+        const cleanStr = (s: any) => (s || '').toLowerCase().trim();
+        const pmcatName = d.name;
+        const pClean = cleanStr(pmcatName);
+
+        // Filter master ads running list for this PMCAT row
+        const pmcatAds = adsRunningMcats.filter((m: any) => cleanStr(m.pmcat_name || m.pmcat) === pClean);
+        const denomMcat = new Set(pmcatAds.map((m: any) => cleanStr(m.mcat_name || m.mcat))).size;
+
+        pmcatMcatMap = new Map();
+
+        // Initialize with master running ads for this PMCAT
+        pmcatAds.forEach((m: any) => {
+          const mcatName = m.mcat_name || m.mcat;
+          if (mcatName) pmcatMcatMap.set(mcatName, { bl_approved: 0, isAdRunning: true });
+        });
+
+        // Add campaign week actual data
+        d.mcatMap.forEach((v: any, k: string) => {
+          if (!pmcatMcatMap.has(k)) {
+            pmcatMcatMap.set(k, { bl_approved: 0, isAdRunning: false });
+          }
+          pmcatMcatMap.get(k).bl_approved += v.bl_approved;
+        });
+
+        let numMcatGe10 = 0;
+        pmcatMcatMap.forEach((v: any) => {
+          if (v.isAdRunning && v.bl_approved >= 10) numMcatGe10++;
+        });
+
+        mcat_div = denomMcat > 0 ? (numMcatGe10 / denomMcat) * 100 : 0;
+
         let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
         d.pmcatMap.forEach((v: any) => {
           if (v.isAdRunning) pmcat_ad_running++;
-          if (v.bl_approved >= 25) pmcat_ge_25++;
+          if (v.isAdRunning && v.bl_approved >= 25) pmcat_ge_25++;
         });
         pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
-
-        let mcat_ad_running = 0; let mcat_ge_10 = 0;
-        d.mcatMap.forEach((v: any) => {
-          if (v.isAdRunning) mcat_ad_running++;
-          if (v.bl_approved >= 10) mcat_ge_10++;
-        });
-        mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
       }
 
       return {
@@ -469,12 +573,11 @@ export default function DailyCampaignTab() {
         blni_pct: d.bl_txn_approved > 0 ? (d.blni / d.bl_txn_approved) * 100 : 0,
         blni_approved_pct: d.bl_approved > 0 ? (d.blni / d.bl_approved) * 100 : 0,
         total_req_approved: d.enq_approved + d.bl_approved + d.calls_approved,
+        mcatMap: pmcatMcatMap,
+        pmcatMap: pmcatPmcatMap,
         mcat_div,
         pmcat_div
       };
-    }).map(r => {
-      const { mcatMap, pmcatMap, ...out } = r as any;
-      return out;
     });
 
     rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -528,9 +631,13 @@ export default function DailyCampaignTab() {
     totals.blni_pct = totals.bl_txn_approved > 0 ? (totals.blni / totals.bl_txn_approved) * 100 : 0;
     totals.blni_approved_pct = totals.bl_approved > 0 ? (totals.blni / totals.bl_approved) * 100 : 0;
     totals.total_req_approved = totals.enq_approved + totals.bl_approved + totals.calls_approved;
-    const activeData = filteredData.filter(d => d.impressions > 0);
-    totals.mcat_div = new Set(activeData.map(d => d.mcat)).size;
-    totals.pmcat_div = new Set(activeData.map(d => d.pmcat)).size;
+    if (timePeriod === 'weekly') {
+      totals.mcat_div = kpiStats.mcat_div;
+      totals.pmcat_div = kpiStats.pmcat_div;
+    } else {
+      totals.mcat_div = null;
+      totals.pmcat_div = null;
+    }
 
     return { rows, totals };
   }, [enrichedData, selectedWeek, isCompareMode, granularity, selectedGroup]);
@@ -598,14 +705,14 @@ export default function DailyCampaignTab() {
         let mcat_ad_running = 0; let mcat_ge_10 = 0;
         d.mcatMap.forEach((v: any) => {
           if (v.isAdRunning) mcat_ad_running++;
-          if (v.bl_approved >= 10) mcat_ge_10++;
+          if (v.isAdRunning && v.bl_approved >= 10) mcat_ge_10++;
         });
         mcat_div = mcat_ad_running > 0 ? (mcat_ge_10 / mcat_ad_running) * 100 : 0;
         
         let pmcat_ad_running = 0; let pmcat_ge_25 = 0;
         d.pmcatMap.forEach((v: any) => {
           if (v.isAdRunning) pmcat_ad_running++;
-          if (v.bl_approved >= 25) pmcat_ge_25++;
+          if (v.isAdRunning && v.bl_approved >= 25) pmcat_ge_25++;
         });
         pmcat_div = pmcat_ad_running > 0 ? (pmcat_ge_25 / pmcat_ad_running) * 100 : 0;
       }
@@ -868,7 +975,7 @@ export default function DailyCampaignTab() {
       .filter(item => item.isAdRunning)
       .sort((a, b) => b.bl_approved - a.bl_approved);
     const qualifiedList = modalData
-      .filter(item => item.bl_approved >= threshold)
+      .filter(item => item.isAdRunning && item.bl_approved >= threshold)
       .sort((a, b) => b.bl_approved - a.bl_approved);
     const diversity = adsRunningList.length > 0
       ? Number(((qualifiedList.length / adsRunningList.length) * 100).toFixed(1))
@@ -1921,7 +2028,7 @@ export default function DailyCampaignTab() {
             </div>
             {(() => {
               const adsRunningList = mcatModalData.filter(m => m.isAdRunning).sort((a,b) => b.bl_approved - a.bl_approved);
-              const blGe10List = mcatModalData.filter(m => m.bl_approved >= 10).sort((a,b) => b.bl_approved - a.bl_approved);
+              const blGe10List = mcatModalData.filter(m => m.isAdRunning && m.bl_approved >= 10).sort((a,b) => b.bl_approved - a.bl_approved);
               const diversity = adsRunningList.length > 0 ? ((blGe10List.length / adsRunningList.length) * 100).toFixed(1) : 0;
               return (
                 <>
@@ -2001,7 +2108,7 @@ export default function DailyCampaignTab() {
             </div>
             {(() => {
               const adsRunningList = pmcatModalData.filter(m => m.isAdRunning).sort((a,b) => b.bl_approved - a.bl_approved);
-              const blGe25List = pmcatModalData.filter(m => m.bl_approved >= 25).sort((a,b) => b.bl_approved - a.bl_approved);
+              const blGe25List = pmcatModalData.filter(m => m.isAdRunning && m.bl_approved >= 25).sort((a,b) => b.bl_approved - a.bl_approved);
               const diversity = adsRunningList.length > 0 ? ((blGe25List.length / adsRunningList.length) * 100).toFixed(1) : 0;
               return (
                 <>

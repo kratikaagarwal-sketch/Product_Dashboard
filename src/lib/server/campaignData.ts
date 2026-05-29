@@ -210,35 +210,71 @@ export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> 
   const cachedResult = getServerCached<AdsRunningMcat[]>(cacheKey);
   if (cachedResult) return cachedResult;
 
-  const query = `
-    SELECT 
-        a.iil_google_ads_lable_name AS flag,
-        gl.glcat_mcat_name,
-        gl.glcat_grp_name, 
-        gl.prime_pmcat_name
-    FROM im_dwh.glcat_mcat_addn_attributes g
-    JOIN im_dwh.iil_google_ads_lable_master a
-        ON a.iil_google_ads_lable_master_id = g.fk_iil_google_ads_lable_master_id
-    JOIN im_dwh.dim_glcat_mcat gl
-        ON gl.glcat_mcat_id = g.fk_glcat_mcat_id
-    WHERE g.fk_glcat_mcat_id IN (
-        SELECT iil_eligible_mcatid 
-        FROM im_dwh.fact_iil_google_ads_eligibility 
-        WHERE iil_eligible_status IN (2, 5)
-    )
-  `;
+  // Fetch ads-running data from Redash query results, then enrich MCAT ids with names
+  const REDASH_HOST = process.env.REDASH_HOST || 'https://redash.intermesh.net';
+  const REDASH_API_KEY = process.env.REDASH_API_KEY || 'N9kwAb9BYe59Dl6IP5ciuezX4lgGnmV31mk0BF79';
+  const REDASH_QUERY_ID = process.env.REDASH_QUERY_ID || '1676';
 
-  const result = await adsRunningPool.query(query);
+  const redashUrl = `${REDASH_HOST.replace(/\/$/, '')}/api/queries/${encodeURIComponent(REDASH_QUERY_ID)}/results.json?api_key=${encodeURIComponent(REDASH_API_KEY)}`;
+
+  let redashResp;
+  try {
+    redashResp = await fetch(redashUrl);
+  } catch (err: any) {
+    const msg = err && err.message ? err.message : String(err);
+    throw new Error(`Failed to fetch Redash query results: ${msg}`);
+  }
+
+  if (!redashResp.ok) {
+    const txt = await redashResp.text().catch(() => '[no body]');
+    throw new Error(`Redash returned ${redashResp.status} ${redashResp.statusText}: ${txt}`);
+  }
+
+  const redashJson = await redashResp.json().catch((e: any) => {
+    throw new Error(`Failed to parse Redash JSON response: ${e && e.message ? e.message : String(e)}`);
+  });
+
+  const rows: any[] = (redashJson && redashJson.query_result && redashJson.query_result.data && Array.isArray(redashJson.query_result.data.rows))
+    ? redashJson.query_result.data.rows
+    : [];
+
+  // collect unique MCAT ids
+  const ids = Array.from(new Set(rows.map(r => r.fk_glcat_mcat_id).filter(Boolean).map(String)));
+
+  const idToNames = new Map<string, { mcat?: string; group?: string; pmcat?: string }>();
+  if (ids.length > 0) {
+    try {
+      const res = await dailyCampaignPool.query(
+        `SELECT glcat_mcat_id, glcat_mcat_name, glcat_grp_name, prime_pmcat_name FROM im_dwh.dim_glcat_mcat WHERE glcat_mcat_id = ANY($1)`,
+        [ids]
+      );
+      res.rows.forEach((r: any) => {
+        idToNames.set(String(r.glcat_mcat_id), {
+          mcat: r.glcat_mcat_name ? String(r.glcat_mcat_name).trim() : '',
+          group: r.glcat_grp_name ? String(r.glcat_grp_name).trim() : '',
+          pmcat: r.prime_pmcat_name ? String(r.prime_pmcat_name).trim() : ''
+        });
+      });
+    } catch (err: any) {
+      console.warn('Failed to enrich MCAT ids:', err && err.message ? err.message : err);
+    }
+  }
+
   const validFlags = new Set(['high', 'low', 'medium']);
+  const data: AdsRunningMcat[] = rows
+    .filter(row => row.iil_google_ads_lable_name)
+    .map(row => {
+      const idKey = row.fk_glcat_mcat_id ? String(row.fk_glcat_mcat_id) : '';
+      const names = idToNames.get(idKey) || { mcat: '', group: '', pmcat: '' };
+      return {
+        flag: String(row.iil_google_ads_lable_name).trim(),
+        mcat_name: names.mcat || '',
+        group_name: names.group || '',
+        pmcat_name: names.pmcat || ''
+      } as AdsRunningMcat;
+    })
+    .filter(r => r.flag && validFlags.has(r.flag.toLowerCase()));
 
-  const data = result.rows
-    .filter(row => row.flag && validFlags.has(row.flag.toLowerCase().trim()))
-    .map(row => ({
-      flag: row.flag.trim(),
-      mcat_name: row.glcat_mcat_name ? row.glcat_mcat_name.trim() : '',
-      group_name: row.glcat_grp_name ? row.glcat_grp_name.trim() : '',
-      pmcat_name: row.prime_pmcat_name ? row.prime_pmcat_name.trim() : '',
-    }));
   setServerCached(cacheKey, data);
   return data;
 };

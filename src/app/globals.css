@@ -106,6 +106,46 @@ body {
   justify-content: center;
   font-size: 13px;
   font-weight: 900;
+   /* Stack compare-view columns and make stats wrap */
+   .compare-view {
+     display: flex;
+     flex-direction: column;
+     gap: 16px;
+   }
+
+   .compare-view .banner,
+   .compare-view .sh,
+   .compare-view .cc {
+     width: 100% !important;
+   }
+
+   .compare-view .bn-left {
+     display: flex;
+     gap: 12px;
+     align-items: center;
+     flex-wrap: wrap;
+   }
+
+   .compare-view .bn-stats {
+     display: flex !important;
+     gap: 12px !important;
+     flex-wrap: wrap !important;
+   }
+
+   .compare-view .bn-stats > div {
+     min-width: 120px;
+     flex: 1 1 120px;
+   }
+
+   /* Ensure AI insights list items wrap and take full width */
+   .compare-view .cc ul li {
+     flex-direction: row;
+     align-items: flex-start;
+   }
+
+   /* Make tables responsive: allow horizontal scroll instead of breaking layout */
+   .tw { overflow-x: auto; }
+   .tw table { width: 100%; min-width: 600px; }
   color: #000;
   flex-shrink: 0
 }
@@ -604,6 +644,11 @@ body {
   grid-template-columns: 1fr 1fr 1fr
 }
 
+/* helper classes for grid column ratios so we can control responsiveness without inline styles */
+.cg-1-1 { grid-template-columns: 1fr 1fr; }
+.cg-2-1 { grid-template-columns: 2fr 1fr; }
+.cg-3 { grid-template-columns: 1fr 1fr 1fr; }
+
 .cc {
   background: var(--surf);
   border: 1px solid var(--bdr);
@@ -687,6 +732,14 @@ body {
 .bn-stats {
   display: flex;
   gap: 22px
+}
+
+/* two-column split helper for KPI banner + side block layouts */
+.split-2 {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 25px;
 }
 
 .bn-val {
@@ -1204,4 +1257,15 @@ body {
   .topbar {
     align-items: center;
   }
+}
+
+/* Additional responsive rules: force grid containers to single column on small devices */
+@media (max-width: 900px) {
+  .cg, .cg-1-1, .cg-2-1, .cg-3, .hygiene-grid { grid-template-columns: 1fr !important; }
+  .cc.w { grid-column: 1 / -1; }
+  .cg { gap: 12px; }
+  .compare-view { display: flex; flex-direction: column; gap: 12px; }
+  .compare-view .bn-stats > div { min-width: 100px; flex: 1 1 100%; }
+  .tw table { min-width: 100%; }
+  .split-2 { flex-direction: column; gap: 12px; }
 }

@@ -1274,7 +1274,7 @@ export default function DailyCampaignTab() {
       {isCompareMode && bestKpis ? (
         <div className="compare-view">
           {/* Top Section: Best KPIs & AI Insights Side by Side */}
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'stretch', marginBottom: '25px' }}>
+          <div className="split-2">
             {/* Best KPIs Banner */}
             <div className="banner" style={{ flex: '2', margin: 0, background: 'linear-gradient(90deg, var(--surf2), var(--surf))', borderLeft: '4px solid #ab47bc' }}>
               <div className="bn-left">
@@ -1372,7 +1372,7 @@ export default function DailyCampaignTab() {
             </div>
           </div>
 
-          <div className="cg" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div className="cg cg-1-1">
             <div className="cc" style={{ margin: 0 }}>
               <div className="ct">Clicks vs Impressions Trend</div>
               <ChartComponent
@@ -1419,7 +1419,7 @@ export default function DailyCampaignTab() {
       ) : (
         <>
           {/* Top Section: Standard View KPIs & AI Insights Side by Side */}
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'stretch', marginBottom: '25px' }}>
+          <div className="split-2">
             
             {/* Standard View Mode KPIs */}
             <div className="banner" style={{ flex: '2', margin: 0 }}>
@@ -1537,7 +1537,7 @@ export default function DailyCampaignTab() {
                 />
               </div>
 
-              <div className="cg" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
+              <div className="cg cg-1-1" style={{ alignItems: 'start' }}>
                 <div className="cc" style={{ margin: 0 }}>
                   <div className="ct">🏆 Top 10 {granularity.toUpperCase()}s</div>
                   <div className="cs">Highest {METRICS.find(m => m.key === rankMetric)?.label}</div>
@@ -1596,7 +1596,7 @@ export default function DailyCampaignTab() {
           <div className="sh" style={{ marginTop: '30px' }}>
             <h2>{timePeriod === 'weekly' ? '12-Week Trend' : timePeriod === 'daily' ? '30-Day Trend' : '12-Month Trend'} <span>{getEntityTitle()}</span></h2>
           </div>
-          <div className="cg" style={{ gridTemplateColumns: '2fr 1fr' }}>
+          <div className="cg cg-2-1">
             <div className="cc w" style={{ gridColumn: 'span 1' }}>
               <div className="ct">Clicks & Impressions Trend</div>
               <ChartComponent

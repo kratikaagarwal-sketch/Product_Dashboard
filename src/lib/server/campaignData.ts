@@ -319,99 +319,121 @@ export const fetchAdsRunningMcats = async (): Promise<string[]> => {
 
 /**
  * Pre-aggregate KPI calculations in SQL instead of in JS.
- * Returns one row per week with all metrics pre-calculated.
- * This avoids expensive JS loops and dramatically speeds up the weekly-report route.
+ * Returns detailed rows (mcat-level per week) with all metrics including product ads.
+ * The route then aggregates these rows to produce final KPIs.
+ * Key optimization: cost ratios and percentages are pre-calculated in SQL.
  */
 export const fetchWeeklyAggregatedStats = async (
   period: CampaignPeriod = 'weekly'
-): Promise<Record<string, any>[]> => {
+): Promise<any[]> => {
   const cacheKey = `weeklyAggStats:${period}`;
-  const cachedResult = getServerCached<Record<string, any>[]>(cacheKey);
+  const cachedResult = getServerCached<any[]>(cacheKey);
   if (cachedResult) return cachedResult;
 
   let dateRangeFilter = "a.st_date >= CURRENT_DATE - INTERVAL '30 days' AND a.st_date < CURRENT_DATE";
+  let productAdsDateTrunc = 'report_date';
   let campaignDateTrunc = 'a.st_date::date';
+  let productAdsDateFilter = "report_date >= CURRENT_DATE - INTERVAL '30 days' AND report_date < CURRENT_DATE";
 
   if (period === 'weekly') {
     dateRangeFilter = "a.st_date >= DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '85 day' AND a.st_date < DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day'";
+    productAdsDateTrunc = "DATE_TRUNC('week', report_date + INTERVAL '1 day')::date - INTERVAL '1 day'";
+    productAdsDateFilter = "report_date >= DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '85 day' AND report_date < DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day'";
   } else if (period === 'monthly') {
     dateRangeFilter = "a.st_date >= CURRENT_DATE - INTERVAL '365 days' AND a.st_date < CURRENT_DATE";
+    productAdsDateTrunc = "DATE_TRUNC('month', report_date)::date";
     campaignDateTrunc = "DATE_TRUNC('month', a.st_date)::date";
+    productAdsDateFilter = "report_date >= CURRENT_DATE - INTERVAL '365 days' AND report_date < CURRENT_DATE";
   }
 
   const query = `
-    WITH campaign_agg AS (
-      SELECT
+    WITH product_ads_agg AS (
+        SELECT
+            TRIM(LOWER(segments_product_type_l4)) AS mcat_name_key,
+            ${productAdsDateTrunc} AS report_date,
+            SUM(total_clicks)       AS total_clicks,
+            SUM(total_impressions)  AS total_impressions,
+            SUM(total_conversions)  AS total_conversions
+        FROM im_datamart_bigquery.fact_bigquery_product_ads
+        WHERE ${productAdsDateFilter}
+        GROUP BY 1, 2
+    )
+    SELECT
         ${campaignDateTrunc} AS week_start_date,
+        b.glcat_mcat_name AS mcat_name,
         b.glcat_grp_name AS group_name,
         b.prime_pmcat_name AS pmcat_name,
-        b.glcat_mcat_name AS mcat_name,
-        SUM(a.bl_sold) AS bl_sold_approved,
-        SUM(a.bl_approved) AS bl_approved,
-        SUM(a.trans) AS bl_txn_approved,
-        SUM(a.blni) AS blni,
+        SUM(a.bl_sold)        AS bl_sold_approved,
+        SUM(a.bl_approved)    AS bl_approved,
+        SUM(a.trans)          AS bl_txn_approved,
+        SUM(a.blni)           AS blni,
         SUM(a.total_cost_inr) AS total_cost_inr,
-        SUM(a.enq_approved) AS enq_approved,
+        SUM(a.enq_approved)   AS enq_approved,
         SUM(a.calls_approved) AS calls_approved,
-        SUM(a.unq_purchaser) AS unq_purchaser,
-        SUM(a.fenq_bl_senders + a.intent_bl_senders + a.direct_bl_senders + a.flpns_bl_senders + a.whatsapp_bl_senders) AS total_senders,
-        COUNT(DISTINCT b.glcat_mcat_id) AS unique_mcats,
-        COUNT(DISTINCT b.prime_pmcat_name) AS unique_pmcats
-      FROM im_datamart_category.mcat_ads_campaign a
-      LEFT JOIN im_dwh.dim_glcat_mcat b ON a.mcat_id = b.glcat_mcat_id
-      WHERE
+        SUM(a.unq_purchaser)  AS unq_purchaser,
+        SUM(a.fenq_bl_senders) AS fenq_bl_senders,
+        SUM(a.intent_bl_senders) AS intent_bl_senders,
+        SUM(a.direct_bl_senders) AS direct_bl_senders,
+        SUM(a.flpns_bl_senders) AS flpns_bl_senders,
+        SUM(a.whatsapp_bl_senders) AS whatsapp_bl_senders,
+        SUM(p.total_clicks)        AS total_clicks,
+        SUM(p.total_impressions)   AS total_impressions,
+        SUM(p.total_conversions)   AS total_conversions,
+        -- Pre-calculate key ratios to avoid expensive JS computation
+        CASE WHEN SUM(a.bl_approved) > 0 THEN (SUM(a.bl_sold)::FLOAT / SUM(a.bl_approved)) * 100 ELSE 0 END AS bl_sold_pct,
+        CASE WHEN SUM(a.bl_approved) > 0 THEN (SUM(a.trans)::FLOAT / SUM(a.bl_approved)) * 100 ELSE 0 END AS txn_pct,
+        CASE WHEN SUM(a.trans) > 0 THEN (SUM(a.blni)::FLOAT / SUM(a.trans)) * 100 ELSE 0 END AS blni_txn_pct,
+        CASE WHEN SUM(a.bl_approved) > 0 THEN SUM(a.total_cost_inr)::FLOAT / SUM(a.bl_approved) ELSE 0 END AS cost_per_bl,
+        CASE WHEN SUM(a.trans) > 0 THEN SUM(a.total_cost_inr)::FLOAT / SUM(a.trans) ELSE 0 END AS cost_per_txn,
+        CASE WHEN SUM(a.bl_approved) > 0 THEN (SUM(a.blni)::FLOAT / SUM(a.bl_approved)) * 100 ELSE 0 END AS blni_appr_pct,
+        CASE WHEN SUM(p.total_impressions) > 0 THEN (SUM(p.total_clicks)::FLOAT / SUM(p.total_impressions)) * 100 ELSE 0 END AS ctr,
+        CASE WHEN SUM(p.total_clicks) > 0 THEN SUM(a.total_cost_inr)::FLOAT / SUM(p.total_clicks) ELSE 0 END AS cpc,
+        CASE WHEN SUM(p.total_conversions) > 0 THEN SUM(a.total_cost_inr)::FLOAT / SUM(p.total_conversions) ELSE 0 END AS cost_per_conv
+    FROM im_datamart_category.mcat_ads_campaign a
+    LEFT JOIN im_dwh.dim_glcat_mcat b
+        ON a.mcat_id = b.glcat_mcat_id
+    LEFT JOIN product_ads_agg p
+        ON TRIM(LOWER(b.glcat_mcat_name)) = p.mcat_name_key
+        AND ${campaignDateTrunc} = p.report_date
+    WHERE
         a.time_period_flag = '${period === 'weekly' ? 'w' : period === 'monthly' ? 'm' : 'd'}'
         AND ${dateRangeFilter}
         AND a.flag = 2
-      GROUP BY 1, 2, 3, 4
-    )
-    SELECT
-      week_start_date,
-      group_name,
-      pmcat_name,
-      mcat_name,
-      SUM(bl_approved) AS bl_approved,
-      SUM(bl_sold_approved) AS bl_sold_approved,
-      SUM(bl_txn_approved) AS bl_txn_approved,
-      SUM(blni) AS blni,
-      SUM(total_cost_inr) AS total_cost_inr,
-      SUM(enq_approved) AS enq_approved,
-      SUM(calls_approved) AS calls_approved,
-      SUM(unq_purchaser) AS unq_purchaser,
-      SUM(total_senders) AS total_senders,
-      -- Pre-calculate key ratios to avoid JS computation
-      CASE WHEN SUM(bl_approved) > 0 THEN (SUM(bl_sold_approved)::FLOAT / SUM(bl_approved)) * 100 ELSE 0 END AS bl_sold_pct,
-      CASE WHEN SUM(bl_approved) > 0 THEN (SUM(bl_txn_approved)::FLOAT / SUM(bl_approved)) * 100 ELSE 0 END AS txn_pct,
-      CASE WHEN SUM(bl_txn_approved) > 0 THEN (SUM(blni)::FLOAT / SUM(bl_txn_approved)) * 100 ELSE 0 END AS blni_txn_pct,
-      CASE WHEN SUM(bl_approved) > 0 THEN SUM(total_cost_inr)::FLOAT / SUM(bl_approved) ELSE 0 END AS cost_per_bl,
-      CASE WHEN SUM(bl_txn_approved) > 0 THEN SUM(total_cost_inr)::FLOAT / SUM(bl_txn_approved) ELSE 0 END AS cost_per_txn,
-      CASE WHEN SUM(bl_approved) > 0 THEN (SUM(blni)::FLOAT / SUM(bl_approved)) * 100 ELSE 0 END AS blni_appr_pct
-    FROM campaign_agg
-    GROUP BY week_start_date, group_name, pmcat_name, mcat_name
-    ORDER BY week_start_date DESC, group_name, pmcat_name, mcat_name;
+    GROUP BY 1, 2, 3, 4
+    ORDER BY 1 DESC, 2;
   `;
 
   const result = await dailyCampaignPool.query(query);
   const data = result.rows.map(row => ({
     week_start_date: extractDateString(row.week_start_date),
-    group_name: row.group_name || 'Unknown Group',
-    pmcat_name: row.pmcat_name || 'Unknown PMCAT',
     mcat_name: row.mcat_name || 'Unknown MCAT',
-    bl_approved: parseInt(row.bl_approved, 10) || 0,
+    group_name: row.group_name || 'Unknown Group',
+    pmcat_name: row.pmcat_name || row.mcat_name || 'Unknown PMCAT',
     bl_sold_approved: parseInt(row.bl_sold_approved, 10) || 0,
+    bl_approved: parseInt(row.bl_approved, 10) || 0,
     bl_txn_approved: parseInt(row.bl_txn_approved, 10) || 0,
     blni: parseInt(row.blni, 10) || 0,
     total_cost_inr: parseFloat(row.total_cost_inr) || 0,
     enq_approved: parseInt(row.enq_approved, 10) || 0,
     calls_approved: parseInt(row.calls_approved, 10) || 0,
     unq_purchaser: parseInt(row.unq_purchaser, 10) || 0,
-    total_senders: parseInt(row.total_senders, 10) || 0,
+    fenq_bl_senders: parseInt(row.fenq_bl_senders, 10) || 0,
+    intent_bl_senders: parseInt(row.intent_bl_senders, 10) || 0,
+    direct_bl_senders: parseInt(row.direct_bl_senders, 10) || 0,
+    flpns_bl_senders: parseInt(row.flpns_bl_senders, 10) || 0,
+    whatsapp_bl_senders: parseInt(row.whatsapp_bl_senders, 10) || 0,
+    total_clicks: parseInt(row.total_clicks, 10) || 0,
+    total_impressions: parseInt(row.total_impressions, 10) || 0,
+    total_conversions: parseFloat(row.total_conversions) || 0,
     bl_sold_pct: parseFloat(row.bl_sold_pct) || 0,
     txn_pct: parseFloat(row.txn_pct) || 0,
     blni_txn_pct: parseFloat(row.blni_txn_pct) || 0,
     cost_per_bl: parseFloat(row.cost_per_bl) || 0,
     cost_per_txn: parseFloat(row.cost_per_txn) || 0,
     blni_appr_pct: parseFloat(row.blni_appr_pct) || 0,
+    ctr: parseFloat(row.ctr) || 0,
+    cpc: parseFloat(row.cpc) || 0,
+    cost_per_conv: parseFloat(row.cost_per_conv) || 0,
   }));
 
   setServerCached(cacheKey, data);

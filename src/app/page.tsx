@@ -54,9 +54,14 @@ export default function Home() {
     };
 
     const warmUpHeavyTabs = () => {
-      prefetchCachedApiData<any[]>("daily-campaign:daily", "/api/daily-campaign?period=daily");
-      prefetchCachedApiData<any[]>("daily-campaign:weekly", "/api/daily-campaign?period=weekly");
-      prefetchCachedApiData<string[]>("ads-running-mcats", "/api/ads-running-mcats");
+      const FIVE_MIN = 5 * 60 * 1000;
+      // Campaign tab — match retryCount=0 suffix used by DailyCampaignTab
+      prefetchCachedApiData<any[]>("daily-campaign:daily:0", "/api/daily-campaign?period=daily", FIVE_MIN);
+      prefetchCachedApiData<any[]>("daily-campaign:weekly:0", "/api/daily-campaign?period=weekly", FIVE_MIN);
+      prefetchCachedApiData<string[]>("ads-running-mcats", "/api/ads-running-mcats", FIVE_MIN);
+      // Weekly report — pre-warm the default view (group granularity, all filters, retryCount=0)
+      const defaultWRParams = 'granularity=group&selectedGroup=all&selectedPmcat=all&selectedMcat=all';
+      prefetchCachedApiData<any>(`weekly-report:${defaultWRParams}:0`, `/api/weekly-report?${defaultWRParams}`, FIVE_MIN);
     };
 
     if (windowWithIdle.requestIdleCallback) {

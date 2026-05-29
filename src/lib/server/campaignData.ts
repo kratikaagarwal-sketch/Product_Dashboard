@@ -2,6 +2,25 @@ import 'server-only';
 
 import { Pool } from 'pg';
 
+// ─── Server-side in-memory cache ────────────────────────────────────────────
+// Prevents repeated Redshift round-trips for the same data within 5 minutes.
+// Each Node process holds its own cache; safe for single-server deploys.
+const SERVER_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type ServerCacheEntry<T> = { data: T; expiresAt: number };
+const _serverCache = new Map<string, ServerCacheEntry<unknown>>();
+
+function getServerCached<T>(key: string): T | undefined {
+  const entry = _serverCache.get(key) as ServerCacheEntry<T> | undefined;
+  if (entry && Date.now() < entry.expiresAt) return entry.data;
+  _serverCache.delete(key);
+  return undefined;
+}
+
+function setServerCached<T>(key: string, data: T): void {
+  _serverCache.set(key, { data, expiresAt: Date.now() + SERVER_CACHE_TTL_MS });
+}
+
 export type CampaignPeriod = 'daily' | 'weekly' | 'monthly';
 
 export type DailyCampaignRow = {
@@ -84,6 +103,10 @@ const extractDateString = (val: unknown): string => {
 };
 
 export const fetchDailyCampaignData = async (period: CampaignPeriod): Promise<DailyCampaignRow[]> => {
+  const cacheKey = `campaign:${period}`;
+  const cachedResult = getServerCached<DailyCampaignRow[]>(cacheKey);
+  if (cachedResult) return cachedResult;
+
   let timePeriodFlag = 'd';
   let dateRangeFilter = "a.st_date >= CURRENT_DATE - INTERVAL '30 days' AND a.st_date < CURRENT_DATE";
   let productAdsDateTrunc = 'report_date';
@@ -149,7 +172,7 @@ export const fetchDailyCampaignData = async (period: CampaignPeriod): Promise<Da
 
   const result = await dailyCampaignPool.query(query);
 
-  return result.rows.map(row => ({
+  const data = result.rows.map(row => ({
     week_start_date: extractDateString(row.week_start_date),
     mcat_name: row.mcat_name || 'Unknown MCAT',
     group_name: row.group_name || 'Unknown Group',
@@ -171,6 +194,8 @@ export const fetchDailyCampaignData = async (period: CampaignPeriod): Promise<Da
     total_impressions: parseInt(row.total_impressions, 10) || 0,
     total_conversions: parseFloat(row.total_conversions) || 0,
   }));
+  setServerCached(cacheKey, data);
+  return data;
 };
 
 export type AdsRunningMcat = {
@@ -181,6 +206,10 @@ export type AdsRunningMcat = {
 };
 
 export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> => {
+  const cacheKey = 'adsRunning';
+  const cachedResult = getServerCached<AdsRunningMcat[]>(cacheKey);
+  if (cachedResult) return cachedResult;
+
   const query = `
     SELECT 
         a.iil_google_ads_lable_name AS flag,
@@ -202,7 +231,7 @@ export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> 
   const result = await adsRunningPool.query(query);
   const validFlags = new Set(['high', 'low', 'medium']);
 
-  return result.rows
+  const data = result.rows
     .filter(row => row.flag && validFlags.has(row.flag.toLowerCase().trim()))
     .map(row => ({
       flag: row.flag.trim(),
@@ -210,6 +239,8 @@ export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> 
       group_name: row.glcat_grp_name ? row.glcat_grp_name.trim() : '',
       pmcat_name: row.prime_pmcat_name ? row.prime_pmcat_name.trim() : '',
     }));
+  setServerCached(cacheKey, data);
+  return data;
 };
 
 export const fetchAdsRunningMcats = async (): Promise<string[]> => {

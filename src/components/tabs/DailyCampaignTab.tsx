@@ -58,15 +58,16 @@ export default function DailyCampaignTab() {
 
   const [showPmcatModal, setShowPmcatModal] = useState(false);
   const [pmcatModalData, setPmcatModalData] = useState<any[]>([]);
+  const [retryCount, setRetryCount] = useState(0);
   const {
     data: campaignData,
     loading,
     error
-  } = useCachedApiData<any[]>(`daily-campaign:${timePeriod}`, `/api/daily-campaign?period=${timePeriod}`);
+  } = useCachedApiData<any[]>(`daily-campaign:${timePeriod}:${retryCount}`, `/api/daily-campaign?period=${timePeriod}`, 5 * 60 * 1000);
   const {
     data: adsRunningMcatsData,
     loading: adsRunningLoading
-  } = useCachedApiData<string[]>('ads-running-mcats', '/api/ads-running-mcats');
+  } = useCachedApiData<string[]>('ads-running-mcats', '/api/ads-running-mcats', 5 * 60 * 1000);
 
   useEffect(() => {
     setPage(0);
@@ -1033,9 +1034,31 @@ export default function DailyCampaignTab() {
 
   if (error) {
     return (
-      <div className="tab on">
-        <div className="alert alert-warn">
-          <strong>Connection Error:</strong> {error}
+      <div className="tab on" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+        <div style={{
+          maxWidth: 460, width: '100%',
+          background: 'var(--surf, #1a1a22)',
+          border: '1px solid var(--red, #ff6168)',
+          borderRadius: 12, padding: '32px', textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+          <h3 style={{ color: 'var(--red, #ff6168)', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
+            Failed to Load Campaign Data
+          </h3>
+          <p style={{ color: 'var(--muted, #888)', fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>
+            {error}
+          </p>
+          <button
+            onClick={() => setRetryCount(c => c + 1)}
+            style={{
+              padding: '10px 28px',
+              background: 'var(--teal, #00cba4)', color: '#000',
+              border: 'none', borderRadius: 6,
+              fontWeight: 700, fontSize: 14, cursor: 'pointer'
+            }}
+          >
+            ↺ &nbsp;Retry
+          </button>
         </div>
       </div>
     );

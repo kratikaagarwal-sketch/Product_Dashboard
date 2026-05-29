@@ -32,6 +32,7 @@ export default function WeeklyReportTab() {
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [selectedPmcat, setSelectedPmcat] = useState<string>('all');
   const [selectedMcat, setSelectedMcat] = useState<string>('all');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 768px)');
@@ -53,8 +54,9 @@ export default function WeeklyReportTab() {
   }, [granularity, selectedGroup, selectedPmcat, selectedMcat]);
 
   const { data, loading, error } = useCachedApiData<WeeklyReportResponse>(
-    `weekly-report:${queryString}`,
-    `/api/weekly-report?${queryString}`
+    `weekly-report:${queryString}:${retryCount}`,
+    `/api/weekly-report?${queryString}`,
+    5 * 60 * 1000
   );
 
   const availableGroups = data?.availableGroups ?? [];
@@ -277,11 +279,106 @@ export default function WeeklyReportTab() {
   };
 
   if (loading) {
-    return <div style={{ padding: '24px', color: '#888' }}>Loading weekly data...</div>;
+    return (
+      <div style={{ padding: '24px' }}>
+        <style>{`
+          @keyframes wrt-shimmer {
+            0%   { background-position: -600px 0; }
+            100% { background-position:  600px 0; }
+          }
+          .wrt-skel {
+            border-radius: 4px;
+            background: linear-gradient(
+              90deg,
+              var(--bg2, #1e1e24) 25%,
+              var(--surf2, #2a2a35) 50%,
+              var(--bg2, #1e1e24) 75%
+            );
+            background-size: 1200px 100%;
+            animation: wrt-shimmer 1.6s ease-in-out infinite;
+          }
+        `}</style>
+
+        {/* Filter bar skeleton */}
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          {[{ w: 140, h: 62 }, { w: 200, h: 62 }, { w: 200, h: 62 }].map((s, i) => (
+            <div key={i} className="wrt-skel" style={{ width: s.w, height: s.h, borderRadius: 8 }} />
+          ))}
+        </div>
+
+        {/* Title + download button skeleton */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div className="wrt-skel" style={{ width: 280, height: 24 }} />
+          <div className="wrt-skel" style={{ width: 148, height: 36, borderRadius: 4 }} />
+        </div>
+
+        {/* Table skeleton */}
+        <div style={{ border: '1px solid var(--bdr, #2a2a35)', borderRadius: 8, overflow: 'hidden' }}>
+          {/* header row */}
+          <div style={{ display: 'flex', gap: '12px', padding: '12px 16px', background: 'var(--surf2, #2a2a35)', borderBottom: '1px solid var(--bdr, #2a2a35)' }}>
+            {[150, 210, 100, 120, 120, 120, 120, 120].map((w, i) => (
+              <div key={i} className="wrt-skel" style={{ width: w, height: 14, flexShrink: 0 }} />
+            ))}
+          </div>
+          {/* data rows */}
+          {Array.from({ length: 16 }).map((_, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex', gap: '12px', padding: '10px 16px',
+                borderBottom: '1px solid var(--bdr, #2a2a35)',
+                background: i % 2 === 0 ? 'var(--bg, #13131a)' : 'var(--surf, #1a1a22)'
+              }}
+            >
+              {/* Section column — show blob only on first row of each visual group */}
+              <div style={{ width: 150, flexShrink: 0 }}>
+                {i % 4 === 0 && <div className="wrt-skel" style={{ width: 110, height: 13 }} />}
+              </div>
+              <div className="wrt-skel" style={{ width: 210, height: 13, flexShrink: 0 }} />
+              {[100, 120, 120, 120, 120, 120].map((w, j) => (
+                <div key={j} className="wrt-skel" style={{ width: w, height: 13, flexShrink: 0 }} />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <p style={{ textAlign: 'center', marginTop: 20, color: 'var(--muted, #888)', fontSize: 13 }}>
+          Fetching weekly report from Redshift…
+        </p>
+      </div>
+    );
   }
 
   if (error) {
-    return <div style={{ padding: '24px', color: 'var(--red, #ff6168)' }}>Error: {error}</div>;
+    return (
+      <div style={{ padding: '40px', display: 'flex', justifyContent: 'center' }}>
+        <div style={{
+          maxWidth: 460, width: '100%',
+          background: 'var(--surf, #1a1a22)',
+          border: '1px solid var(--red, #ff6168)',
+          borderRadius: 12, padding: '32px', textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+          <h3 style={{ color: 'var(--red, #ff6168)', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
+            Failed to Load Weekly Report
+          </h3>
+          <p style={{ color: 'var(--muted, #888)', fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>
+            {error}
+          </p>
+          <button
+            onClick={() => setRetryCount(c => c + 1)}
+            style={{
+              padding: '10px 28px',
+              background: 'var(--teal, #00cba4)', color: '#000',
+              border: 'none', borderRadius: 6,
+              fontWeight: 700, fontSize: 14, cursor: 'pointer'
+            }}
+          >
+            ↺ &nbsp;Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -3,12 +3,14 @@ import 'server-only';
 import { Pool } from 'pg';
 
 // ─── Server-side in-memory cache ────────────────────────────────────────────
-// Prevents repeated Redshift round-trips for the same data within 5 minutes.
+// Prevents repeated Redshift round-trips for the same data within 10 minutes.
 // Each Node process holds its own cache; safe for single-server deploys.
-const SERVER_CACHE_TTL_MS = 5 * 60 * 1000;
+const SERVER_CACHE_TTL_MS = 10 * 60 * 1000;
+const REDASH_CACHE_TTL_MS = 30 * 60 * 1000; // Redash results are stable; cache for 30 min
 
 type ServerCacheEntry<T> = { data: T; expiresAt: number };
 const _serverCache = new Map<string, ServerCacheEntry<unknown>>();
+const _redashCache = new Map<string, ServerCacheEntry<unknown>>();
 
 function getServerCached<T>(key: string): T | undefined {
   const entry = _serverCache.get(key) as ServerCacheEntry<T> | undefined;
@@ -19,6 +21,17 @@ function getServerCached<T>(key: string): T | undefined {
 
 function setServerCached<T>(key: string, data: T): void {
   _serverCache.set(key, { data, expiresAt: Date.now() + SERVER_CACHE_TTL_MS });
+}
+
+function getRedashCached<T>(key: string): T | undefined {
+  const entry = _redashCache.get(key) as ServerCacheEntry<T> | undefined;
+  if (entry && Date.now() < entry.expiresAt) return entry.data;
+  _redashCache.delete(key);
+  return undefined;
+}
+
+function setRedashCached<T>(key: string, data: T): void {
+  _redashCache.set(key, { data, expiresAt: Date.now() + REDASH_CACHE_TTL_MS });
 }
 
 export type CampaignPeriod = 'daily' | 'weekly' | 'monthly';
@@ -111,17 +124,20 @@ export const fetchDailyCampaignData = async (period: CampaignPeriod): Promise<Da
   let dateRangeFilter = "a.st_date >= CURRENT_DATE - INTERVAL '30 days' AND a.st_date < CURRENT_DATE";
   let productAdsDateTrunc = 'report_date';
   let campaignDateTrunc = 'a.st_date::date';
+  let productAdsDateFilter = "report_date >= CURRENT_DATE - INTERVAL '30 days' AND report_date < CURRENT_DATE";
 
   if (period === 'weekly') {
     timePeriodFlag = 'w';
     dateRangeFilter = "a.st_date >= DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '85 day' AND a.st_date < DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day'";
     productAdsDateTrunc = "DATE_TRUNC('week', report_date + INTERVAL '1 day')::date - INTERVAL '1 day'";
     campaignDateTrunc = 'a.st_date::date';
+    productAdsDateFilter = "report_date >= DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '85 day' AND report_date < DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day'";
   } else if (period === 'monthly') {
     timePeriodFlag = 'm';
     dateRangeFilter = "a.st_date >= CURRENT_DATE - INTERVAL '365 days' AND a.st_date < CURRENT_DATE";
     productAdsDateTrunc = "DATE_TRUNC('month', report_date)::date";
     campaignDateTrunc = "DATE_TRUNC('month', a.st_date)::date";
+    productAdsDateFilter = "report_date >= CURRENT_DATE - INTERVAL '365 days' AND report_date < CURRENT_DATE";
   }
 
   const query = `
@@ -133,6 +149,7 @@ export const fetchDailyCampaignData = async (period: CampaignPeriod): Promise<Da
             SUM(total_impressions)  AS total_impressions,
             SUM(total_conversions)  AS total_conversions
         FROM im_datamart_bigquery.fact_bigquery_product_ads
+      WHERE ${productAdsDateFilter}
         GROUP BY 1, 2
     )
     SELECT
@@ -207,8 +224,15 @@ export type AdsRunningMcat = {
 
 export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> => {
   const cacheKey = 'adsRunning';
+  // Check faster memory cache first (10-min old data OK for real-time usage)
   const cachedResult = getServerCached<AdsRunningMcat[]>(cacheKey);
   if (cachedResult) return cachedResult;
+  // Check longer-lived Redash cache (30 min; stable data)
+  const redashCached = getRedashCached<AdsRunningMcat[]>(cacheKey);
+  if (redashCached) {
+    setServerCached(cacheKey, redashCached); // Refresh short-lived cache
+    return redashCached;
+  }
 
   // Fetch ads-running data from Redash query results, then enrich MCAT ids with names
   const REDASH_HOST = process.env.REDASH_HOST || 'https://redash.intermesh.net';
@@ -219,10 +243,18 @@ export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> 
 
   let redashResp;
   try {
-    redashResp = await fetch(redashUrl);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for Redash
+    redashResp = await fetch(redashUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
   } catch (err: any) {
     const msg = err && err.message ? err.message : String(err);
-    throw new Error(`Failed to fetch Redash query results: ${msg}`);
+    // Fall back to empty list if Redash times out; don't crash the report
+    console.warn(`Redash fetch failed (${msg}); using empty ads-running list`);
+    const emptyData: AdsRunningMcat[] = [];
+    setServerCached(cacheKey, emptyData);
+    setRedashCached(cacheKey, emptyData);
+    return emptyData;
   }
 
   if (!redashResp.ok) {
@@ -276,10 +308,112 @@ export const fetchAdsRunningMcatsEnriched = async (): Promise<AdsRunningMcat[]> 
     .filter(r => r.flag && validFlags.has(r.flag.toLowerCase()));
 
   setServerCached(cacheKey, data);
+  setRedashCached(cacheKey, data); // Also store in long-lived cache
   return data;
 };
 
 export const fetchAdsRunningMcats = async (): Promise<string[]> => {
   const data = await fetchAdsRunningMcatsEnriched();
   return data.map(d => d.mcat_name);
+};
+
+/**
+ * Pre-aggregate KPI calculations in SQL instead of in JS.
+ * Returns one row per week with all metrics pre-calculated.
+ * This avoids expensive JS loops and dramatically speeds up the weekly-report route.
+ */
+export const fetchWeeklyAggregatedStats = async (
+  period: CampaignPeriod = 'weekly'
+): Promise<Record<string, any>[]> => {
+  const cacheKey = `weeklyAggStats:${period}`;
+  const cachedResult = getServerCached<Record<string, any>[]>(cacheKey);
+  if (cachedResult) return cachedResult;
+
+  let dateRangeFilter = "a.st_date >= CURRENT_DATE - INTERVAL '30 days' AND a.st_date < CURRENT_DATE";
+  let campaignDateTrunc = 'a.st_date::date';
+
+  if (period === 'weekly') {
+    dateRangeFilter = "a.st_date >= DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '85 day' AND a.st_date < DATE_TRUNC('week', CURRENT_DATE + INTERVAL '1 day') - INTERVAL '1 day'";
+  } else if (period === 'monthly') {
+    dateRangeFilter = "a.st_date >= CURRENT_DATE - INTERVAL '365 days' AND a.st_date < CURRENT_DATE";
+    campaignDateTrunc = "DATE_TRUNC('month', a.st_date)::date";
+  }
+
+  const query = `
+    WITH campaign_agg AS (
+      SELECT
+        ${campaignDateTrunc} AS week_start_date,
+        b.glcat_grp_name AS group_name,
+        b.prime_pmcat_name AS pmcat_name,
+        b.glcat_mcat_name AS mcat_name,
+        SUM(a.bl_sold) AS bl_sold_approved,
+        SUM(a.bl_approved) AS bl_approved,
+        SUM(a.trans) AS bl_txn_approved,
+        SUM(a.blni) AS blni,
+        SUM(a.total_cost_inr) AS total_cost_inr,
+        SUM(a.enq_approved) AS enq_approved,
+        SUM(a.calls_approved) AS calls_approved,
+        SUM(a.unq_purchaser) AS unq_purchaser,
+        SUM(a.fenq_bl_senders + a.intent_bl_senders + a.direct_bl_senders + a.flpns_bl_senders + a.whatsapp_bl_senders) AS total_senders,
+        COUNT(DISTINCT b.glcat_mcat_id) AS unique_mcats,
+        COUNT(DISTINCT b.prime_pmcat_name) AS unique_pmcats
+      FROM im_datamart_category.mcat_ads_campaign a
+      LEFT JOIN im_dwh.dim_glcat_mcat b ON a.mcat_id = b.glcat_mcat_id
+      WHERE
+        a.time_period_flag = '${period === 'weekly' ? 'w' : period === 'monthly' ? 'm' : 'd'}'
+        AND ${dateRangeFilter}
+        AND a.flag = 2
+      GROUP BY 1, 2, 3, 4
+    )
+    SELECT
+      week_start_date,
+      group_name,
+      pmcat_name,
+      mcat_name,
+      SUM(bl_approved) AS bl_approved,
+      SUM(bl_sold_approved) AS bl_sold_approved,
+      SUM(bl_txn_approved) AS bl_txn_approved,
+      SUM(blni) AS blni,
+      SUM(total_cost_inr) AS total_cost_inr,
+      SUM(enq_approved) AS enq_approved,
+      SUM(calls_approved) AS calls_approved,
+      SUM(unq_purchaser) AS unq_purchaser,
+      SUM(total_senders) AS total_senders,
+      -- Pre-calculate key ratios to avoid JS computation
+      CASE WHEN SUM(bl_approved) > 0 THEN (SUM(bl_sold_approved)::FLOAT / SUM(bl_approved)) * 100 ELSE 0 END AS bl_sold_pct,
+      CASE WHEN SUM(bl_approved) > 0 THEN (SUM(bl_txn_approved)::FLOAT / SUM(bl_approved)) * 100 ELSE 0 END AS txn_pct,
+      CASE WHEN SUM(bl_txn_approved) > 0 THEN (SUM(blni)::FLOAT / SUM(bl_txn_approved)) * 100 ELSE 0 END AS blni_txn_pct,
+      CASE WHEN SUM(bl_approved) > 0 THEN SUM(total_cost_inr)::FLOAT / SUM(bl_approved) ELSE 0 END AS cost_per_bl,
+      CASE WHEN SUM(bl_txn_approved) > 0 THEN SUM(total_cost_inr)::FLOAT / SUM(bl_txn_approved) ELSE 0 END AS cost_per_txn,
+      CASE WHEN SUM(bl_approved) > 0 THEN (SUM(blni)::FLOAT / SUM(bl_approved)) * 100 ELSE 0 END AS blni_appr_pct
+    FROM campaign_agg
+    GROUP BY week_start_date, group_name, pmcat_name, mcat_name
+    ORDER BY week_start_date DESC, group_name, pmcat_name, mcat_name;
+  `;
+
+  const result = await dailyCampaignPool.query(query);
+  const data = result.rows.map(row => ({
+    week_start_date: extractDateString(row.week_start_date),
+    group_name: row.group_name || 'Unknown Group',
+    pmcat_name: row.pmcat_name || 'Unknown PMCAT',
+    mcat_name: row.mcat_name || 'Unknown MCAT',
+    bl_approved: parseInt(row.bl_approved, 10) || 0,
+    bl_sold_approved: parseInt(row.bl_sold_approved, 10) || 0,
+    bl_txn_approved: parseInt(row.bl_txn_approved, 10) || 0,
+    blni: parseInt(row.blni, 10) || 0,
+    total_cost_inr: parseFloat(row.total_cost_inr) || 0,
+    enq_approved: parseInt(row.enq_approved, 10) || 0,
+    calls_approved: parseInt(row.calls_approved, 10) || 0,
+    unq_purchaser: parseInt(row.unq_purchaser, 10) || 0,
+    total_senders: parseInt(row.total_senders, 10) || 0,
+    bl_sold_pct: parseFloat(row.bl_sold_pct) || 0,
+    txn_pct: parseFloat(row.txn_pct) || 0,
+    blni_txn_pct: parseFloat(row.blni_txn_pct) || 0,
+    cost_per_bl: parseFloat(row.cost_per_bl) || 0,
+    cost_per_txn: parseFloat(row.cost_per_txn) || 0,
+    blni_appr_pct: parseFloat(row.blni_appr_pct) || 0,
+  }));
+
+  setServerCached(cacheKey, data);
+  return data;
 };

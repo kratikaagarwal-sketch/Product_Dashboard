@@ -3,7 +3,9 @@ import 'server-only';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-const CACHE_ROOT = path.join(process.cwd(), 'data', 'json-cache');
+const CACHE_ROOT = process.env.VERCEL
+  ? path.join('/tmp', 'json-cache')
+  : path.join(process.cwd(), 'data', 'json-cache');
 type CacheEntry = {
   mtimeMs: number;
   size: number;
@@ -37,6 +39,10 @@ export const readJsonCache = async <T,>(fileName: string): Promise<T | null> => 
     return data;
   } catch (error: any) {
     if (error?.code === 'ENOENT') {
+      const cached = memoryCache.get(filePath);
+      if (cached) {
+        return cached.data as T;
+      }
       return null;
     }
     throw error;
@@ -44,14 +50,28 @@ export const readJsonCache = async <T,>(fileName: string): Promise<T | null> => 
 };
 
 export const writeJsonCache = async <T,>(fileName: string, data: T): Promise<void> => {
-  await ensureCacheRoot();
   const filePath = resolveCachePath(fileName);
   const serialized = JSON.stringify(data, null, 2);
-  await fs.writeFile(filePath, serialized, 'utf8');
-  const stats = await fs.stat(filePath);
   memoryCache.set(filePath, {
-    mtimeMs: stats.mtimeMs,
-    size: stats.size,
+    mtimeMs: Date.now(),
+    size: Buffer.byteLength(serialized, 'utf8'),
     data,
   });
+
+  try {
+    await ensureCacheRoot();
+    await fs.writeFile(filePath, serialized, 'utf8');
+    const stats = await fs.stat(filePath);
+    memoryCache.set(filePath, {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      data,
+    });
+  } catch (error: any) {
+    if (error?.code === 'EROFS' || error?.code === 'EACCES' || error?.code === 'EPERM') {
+      console.warn(`Skipping disk cache write for ${fileName} on this runtime: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
 };

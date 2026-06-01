@@ -26,11 +26,18 @@ export const fetchCachedApiData = async <T,>(cacheKey: string, url: string, ttlM
 
   const request = fetch(url)
     .then(async response => {
+      const bodyText = await response.text();
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        try {
+          const parsed = JSON.parse(bodyText) as { error?: string; message?: string };
+          const serverMessage = parsed?.error || parsed?.message;
+          throw new Error(serverMessage ? `Request failed with status ${response.status}: ${serverMessage}` : `Request failed with status ${response.status}`);
+        } catch {
+          throw new Error(bodyText ? `Request failed with status ${response.status}: ${bodyText}` : `Request failed with status ${response.status}`);
+        }
       }
 
-      const result = await response.json() as ApiEnvelope<T>;
+      const result = JSON.parse(bodyText) as ApiEnvelope<T>;
       if (!result.success) {
         throw new Error(result.error || 'Failed to fetch data');
       }

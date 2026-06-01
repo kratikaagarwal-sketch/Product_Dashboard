@@ -1,21 +1,9 @@
 import { NextResponse } from 'next/server';
-import { fetchAdsRunningMcatsEnriched, fetchWeeklyAggregatedStats } from '@/lib/server/campaignData';
+import { getAdsRunningRows, getWeeklyReportRows } from '@/lib/server/reportSheetCache';
 import { WEEKLY_REPORT_METRICS } from '@/lib/weeklyReportMetrics';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
-
-// Simple in-memory response cache for this route to speed repeated identical requests
-const ROUTE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-type RouteCacheEntry = { data: any; expiresAt: number };
-const _routeCache = new Map<string, RouteCacheEntry>();
-const getRouteCached = (key: string) => {
-  const e = _routeCache.get(key) as RouteCacheEntry | undefined;
-  if (e && Date.now() < e.expiresAt) return e.data;
-  _routeCache.delete(key);
-  return undefined;
-};
-const setRouteCached = (key: string, data: any) => _routeCache.set(key, { data, expiresAt: Date.now() + ROUTE_CACHE_TTL_MS });
 
 type Granularity = 'group' | 'pmcat' | 'mcat';
 
@@ -27,17 +15,10 @@ export async function GET(request: Request) {
     const selectedPmcat = searchParams.get('selectedPmcat') || 'all';
     const selectedMcat = searchParams.get('selectedMcat') || 'all';
 
-    // Route-level cache: if an identical request was recently served, return it immediately
-    const cacheKey = `weekly-report:${new URL(request.url).searchParams.toString()}`;
-    const cached = getRouteCached(cacheKey);
-    if (cached) {
-      return NextResponse.json(cached);
-    }
-
     // Fetch pre-aggregated stats from SQL (includes product ads + cost ratios pre-calculated)
     const [aggregatedStats, adsRunningMcatsEnriched] = await Promise.all([
-      fetchWeeklyAggregatedStats('weekly'),
-      fetchAdsRunningMcatsEnriched()
+      getWeeklyReportRows(),
+      getAdsRunningRows()
     ]);
 
     const adsRunningSet = new Set(adsRunningMcatsEnriched.map(m => m.mcat_name.toLowerCase().trim()));
@@ -288,7 +269,6 @@ export async function GET(request: Request) {
         }
       }
     };
-    try { setRouteCached(cacheKey, responseBody); } catch (e) { /* ignore cache set errors */ }
     return NextResponse.json(responseBody);
   } catch (error: any) {
     console.error('Error in weekly-report route:', error);

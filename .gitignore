@@ -20,6 +20,9 @@
 # production
 /build
 
+# generated JSON caches
+/data/json-cache/
+
 # misc
 .DS_Store
 *.pem

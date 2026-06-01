@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SearchableSelect from '../SearchableSelect';
 import { useCachedApiData } from '@/lib/clientApiCache';
 import { WEEKLY_REPORT_METRICS } from '@/lib/weeklyReportMetrics';
@@ -33,6 +33,7 @@ export default function WeeklyReportTab() {
   const [selectedPmcat, setSelectedPmcat] = useState<string>('all');
   const [selectedMcat, setSelectedMcat] = useState<string>('all');
   const [retryCount, setRetryCount] = useState(0);
+  const syncTriggeredRef = useRef(false);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 768px)');
@@ -64,6 +65,17 @@ export default function WeeklyReportTab() {
   const availableMcats = data?.availableMcats ?? [];
   const weeks = data?.weeks ?? [];
   const reportData = data?.reportData ?? { dataByWeek: [], bestEver: {} };
+
+  useEffect(() => {
+    if (loading || error || !data || syncTriggeredRef.current) return;
+    syncTriggeredRef.current = true;
+
+    void fetch('/api/report-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'weekly-report' }),
+    }).catch(() => undefined);
+  }, [loading, error, data]);
 
   const filteredMetrics = useMemo(() => {
     return WEEKLY_REPORT_METRICS.filter(metric => {

@@ -34,3 +34,20 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Report Sheet Cache
+
+The weekly and campaign reports now read from Google Sheets first and refresh those sheets after a report loads.
+
+Required environment variables:
+
+- `REPORT_SHEETS_SPREADSHEET_ID`
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
+
+Optional sheet names:
+
+- `WEEKLY_REPORT_SHEET_NAME`
+- `CAMPAIGN_DAILY_SHEET_NAME`
+- `CAMPAIGN_WEEKLY_SHEET_NAME`
+- `CAMPAIGN_MONTHLY_SHEET_NAME`
+- `ADS_RUNNING_SHEET_NAME`

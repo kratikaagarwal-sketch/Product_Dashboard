@@ -13,7 +13,6 @@ import BlTab from "@/components/tabs/BlTab";
 import TrafficEnquiryTab from "@/components/tabs/TrafficEnquiryTab";
 import DailyCampaignTab from "@/components/tabs/DailyCampaignTab";
 import WeeklyReportTab from "@/components/tabs/WeeklyReportTab";
-import { prefetchCachedApiData } from "@/lib/clientApiCache";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("weekly_report");
@@ -46,32 +45,6 @@ export default function Home() {
   useEffect(() => {
     setVisitedTabs(prev => (prev.includes(activeTab) ? prev : [...prev, activeTab]));
   }, [activeTab]);
-
-  useEffect(() => {
-    const windowWithIdle = window as Window & {
-      requestIdleCallback?: (callback: () => void) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
-
-    const warmUpHeavyTabs = () => {
-      const FIVE_MIN = 5 * 60 * 1000;
-      // Campaign tab — match retryCount=0 suffix used by DailyCampaignTab
-      prefetchCachedApiData<any[]>("daily-campaign:daily:0", "/api/daily-campaign?period=daily", FIVE_MIN);
-      prefetchCachedApiData<any[]>("daily-campaign:weekly:0", "/api/daily-campaign?period=weekly", FIVE_MIN);
-      prefetchCachedApiData<any[]>("ads-running-mcats", "/api/ads-running-mcats", FIVE_MIN);
-      // Weekly report — pre-warm the default view (group granularity, all filters, retryCount=0)
-      const defaultWRParams = 'granularity=group&selectedGroup=all&selectedPmcat=all&selectedMcat=all';
-      prefetchCachedApiData<any>(`weekly-report:${defaultWRParams}:0`, `/api/weekly-report?${defaultWRParams}`, FIVE_MIN);
-    };
-
-    if (windowWithIdle.requestIdleCallback) {
-      const idleHandle = windowWithIdle.requestIdleCallback(warmUpHeavyTabs);
-      return () => windowWithIdle.cancelIdleCallback?.(idleHandle);
-    }
-
-    const timeoutId = window.setTimeout(warmUpHeavyTabs, 400);
-    return () => window.clearTimeout(timeoutId);
-  }, []);
 
   return (
     <div className="layout">

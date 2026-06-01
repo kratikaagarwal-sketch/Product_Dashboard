@@ -93,7 +93,7 @@ export default function McatPauseTab() {
     return (
       <div className="tab on" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px', flexDirection: 'column', gap: '16px' }}>
         <div style={{ width: '40px', height: '40px', border: '3px solid var(--bdr2)', borderTopColor: 'var(--teal)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        <span style={{ color: 'var(--muted)', fontSize: '14px' }}>Loading MCAT pause data from Google Sheets...</span>
+        <span style={{ color: 'var(--muted)', fontSize: '14px' }}>Loading MCAT pause cache...</span>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
@@ -108,7 +108,7 @@ export default function McatPauseTab() {
           <div className="cs" style={{ marginBottom: '16px', lineHeight: '1.6' }}>{error}</div>
           <div style={{ background: 'var(--bg2)', borderRadius: '8px', padding: '12px 16px', fontSize: '12px', color: 'var(--muted)', textAlign: 'left' }}>
             <strong style={{ color: 'var(--fg)' }}>To fix this:</strong><br />
-            Ensure the Google Sheet is shared as <em>Anyone with the link</em> → <strong>Viewer</strong><br />
+            Refresh the cache source, then try again.<br />
           </div>
           <button className="btn btn-p" style={{ marginTop: '16px', padding: '8px 20px' }} onClick={() => window.location.reload()}>Retry</button>
         </div>

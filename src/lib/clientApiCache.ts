@@ -8,29 +8,16 @@ type ApiEnvelope<T> = {
   error?: string;
 };
 
-type CacheEntry = {
-  data: unknown;
-  updatedAt: number;
-};
-
 const DEFAULT_TTL_MS = 60 * 1000;
-const responseCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
-const isFresh = (cacheKey: string, ttlMs: number) => {
-  const cached = responseCache.get(cacheKey);
-  return !!cached && Date.now() - cached.updatedAt < ttlMs;
-};
-
 export const getCachedApiData = <T,>(cacheKey: string) => {
-  const cached = responseCache.get(cacheKey);
-  return cached ? (cached.data as T) : undefined;
+  void cacheKey;
+  return undefined as T | undefined;
 };
 
 export const fetchCachedApiData = async <T,>(cacheKey: string, url: string, ttlMs = DEFAULT_TTL_MS) => {
-  if (isFresh(cacheKey, ttlMs)) {
-    return responseCache.get(cacheKey)!.data as T;
-  }
+  void ttlMs;
 
   const existingRequest = inFlightRequests.get(cacheKey);
   if (existingRequest) {
@@ -47,11 +34,6 @@ export const fetchCachedApiData = async <T,>(cacheKey: string, url: string, ttlM
       if (!result.success) {
         throw new Error(result.error || 'Failed to fetch data');
       }
-
-      responseCache.set(cacheKey, {
-        data: result.data,
-        updatedAt: Date.now()
-      });
 
       return result.data;
     })

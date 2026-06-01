@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import ChartComponent from '../ChartComponent';
 import SearchableSelect from '../SearchableSelect';
@@ -59,6 +59,7 @@ export default function DailyCampaignTab() {
   const [showPmcatModal, setShowPmcatModal] = useState(false);
   const [pmcatModalData, setPmcatModalData] = useState<any[]>([]);
   const [retryCount, setRetryCount] = useState(0);
+  const syncTriggeredRef = useRef<string>('');
   const {
     data: campaignData,
     loading,
@@ -120,6 +121,20 @@ export default function DailyCampaignTab() {
       };
     });
   }, [data]);
+
+  useEffect(() => {
+    if (loading || error || !campaignData) return;
+
+    const syncKey = `campaign:${timePeriod}`;
+    if (syncTriggeredRef.current === syncKey) return;
+    syncTriggeredRef.current = syncKey;
+
+    void fetch('/api/report-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'campaign', period: timePeriod }),
+    }).catch(() => undefined);
+  }, [loading, error, campaignData, timePeriod]);
 
   const weeks = useMemo(() => Array.from(new Set(data.map(d => d.week_start_date))).sort((a: any, b: any) => b.localeCompare(a)) as string[], [data]);
 

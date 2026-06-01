@@ -10,15 +10,38 @@ type ApiEnvelope<T> = {
 
 const DEFAULT_TTL_MS = 60 * 1000;
 const inFlightRequests = new Map<string, Promise<unknown>>();
+type CacheEntry<T> = {
+  data: T;
+  expiresAt: number;
+};
+const responseCache = new Map<string, CacheEntry<unknown>>();
+
+const getCachedEntry = <T,>(cacheKey: string): T | undefined => {
+  const entry = responseCache.get(cacheKey) as CacheEntry<T> | undefined;
+  if (!entry) return undefined;
+  if (Date.now() >= entry.expiresAt) {
+    responseCache.delete(cacheKey);
+    return undefined;
+  }
+  return entry.data;
+};
+
+const setCachedEntry = <T,>(cacheKey: string, data: T, ttlMs: number) => {
+  responseCache.set(cacheKey, {
+    data,
+    expiresAt: Date.now() + ttlMs,
+  });
+};
 
 export const getCachedApiData = <T,>(cacheKey: string) => {
-  void cacheKey;
-  return undefined as T | undefined;
+  return getCachedEntry<T>(cacheKey);
 };
 
 export const fetchCachedApiData = async <T,>(cacheKey: string, url: string, ttlMs = DEFAULT_TTL_MS) => {
-  void ttlMs;
-
+  const cached = getCachedEntry<T>(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
   const existingRequest = inFlightRequests.get(cacheKey);
   if (existingRequest) {
     return existingRequest as Promise<T>;
@@ -42,6 +65,7 @@ export const fetchCachedApiData = async <T,>(cacheKey: string, url: string, ttlM
         throw new Error(result.error || 'Failed to fetch data');
       }
 
+      setCachedEntry(cacheKey, result.data, ttlMs);
       return result.data;
     })
     .finally(() => {
@@ -56,15 +80,20 @@ export const prefetchCachedApiData = <T,>(cacheKey: string, url: string, ttlMs =
   void fetchCachedApiData<T>(cacheKey, url, ttlMs).catch(() => undefined);
 };
 
-export const useCachedApiData = <T,>(cacheKey: string, url: string, ttlMs = DEFAULT_TTL_MS) => {
-  const cachedData = getCachedApiData<T>(cacheKey);
+export const useCachedApiData = <T,>(
+  cacheKey: string,
+  url: string,
+  ttlMs = DEFAULT_TTL_MS,
+  initialData?: T,
+) => {
+  const cachedData = initialData ?? getCachedApiData<T>(cacheKey);
   const [data, setData] = useState<T | null>(cachedData ?? null);
   const [loading, setLoading] = useState(cachedData === undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isActive = true;
-    const cached = getCachedApiData<T>(cacheKey);
+    const cached = initialData ?? getCachedApiData<T>(cacheKey);
 
     if (cached !== undefined) {
       setData(cached);
@@ -90,7 +119,7 @@ export const useCachedApiData = <T,>(cacheKey: string, url: string, ttlMs = DEFA
     return () => {
       isActive = false;
     };
-  }, [cacheKey, url, ttlMs]);
+  }, [cacheKey, url, ttlMs, initialData]);
 
   return {
     data,

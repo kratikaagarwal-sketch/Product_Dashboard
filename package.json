@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "npm exec --yes tsx scripts/prewarmWeeklyReportCache.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"

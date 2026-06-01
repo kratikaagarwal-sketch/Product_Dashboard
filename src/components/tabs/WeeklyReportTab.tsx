@@ -26,7 +26,11 @@ const DESKTOP_METRIC_WIDTH = 200;
 const MOBILE_BEST_WIDTH = 96;
 const DESKTOP_BEST_WIDTH = 120;
 
-export default function WeeklyReportTab() {
+type WeeklyReportTabProps = {
+  initialData?: WeeklyReportResponse;
+};
+
+export default function WeeklyReportTab({ initialData }: WeeklyReportTabProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [granularity, setGranularity] = useState<Granularity>('group');
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
@@ -57,7 +61,8 @@ export default function WeeklyReportTab() {
   const { data, loading, error } = useCachedApiData<WeeklyReportResponse>(
     `weekly-report:${queryString}:${retryCount}`,
     `/api/weekly-report?${queryString}`,
-    5 * 60 * 1000
+    5 * 60 * 1000,
+    initialData
   );
 
   const availableGroups = data?.availableGroups ?? [];

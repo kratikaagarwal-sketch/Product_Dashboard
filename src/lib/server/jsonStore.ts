@@ -12,12 +12,33 @@ type CacheEntry = {
   data: unknown;
 };
 
+export type JsonCacheMeta = {
+  mtimeMs: number;
+  size: number;
+};
+
 const memoryCache = new Map<string, CacheEntry>();
 
 const resolveCachePath = (fileName: string) => path.join(CACHE_ROOT, fileName);
 
 const ensureCacheRoot = async () => {
   await fs.mkdir(CACHE_ROOT, { recursive: true });
+};
+
+export const getJsonCacheMeta = async (fileName: string): Promise<JsonCacheMeta | null> => {
+  const filePath = resolveCachePath(fileName);
+  try {
+    const stats = await fs.stat(filePath);
+    return {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+    };
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
 };
 
 export const readJsonCache = async <T,>(fileName: string): Promise<T | null> => {

@@ -7,21 +7,15 @@
    - Network:      http://192.168.29.92:3000
 
  ✓ Starting...
- ✓ Ready in 9.1s
- ○ Compiling /api/daily-campaign ...
- ✓ Compiled /api/daily-campaign in 6.2s (308 modules)
- GET /api/daily-campaign?period=weekly&format=compact 200 in 8682ms
- GET /api/daily-campaign?period=weekly 200 in 12583ms
- GET /api/daily-campaign?period=weekly&format=compact 200 in 382ms
- GET /api/daily-campaign?period=weekly 200 in 1523ms
+ ✓ Ready in 2.6s
  ○ Compiling / ...
- ✓ Compiled / in 16s (1129 modules)
- GET / 200 in 22687ms
- ○ Compiling /_error ...
- ✓ Compiled /_error in 2.9s (708 modules)
- GET /api/daily-campaign?period=weekly 500 in 3545ms
- GET /api/daily-campaign?period=weekly&format=compact 500 in 1829ms
- ✓ Compiled in 1087ms (400 modules)
- ✓ Compiled in 183ms (400 modules)
- ✓ Compiled in 339ms (400 modules)
- ✓ Compiled in 349ms (400 modules)
+ ✓ Compiled / in 8.2s (1141 modules)
+ GET / 200 in 33818ms
+ GET / 200 in 10382ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 1867ms (1131 modules)
+ GET /favicon.ico 200 in 2090ms
+ POST /api/report-sync 200 in 19105ms
+ POST /api/report-sync 200 in 25618ms
+ GET / 200 in 17408ms
+ GET /favicon.ico 200 in 41ms

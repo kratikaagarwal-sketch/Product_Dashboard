@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prebuild": "node scripts/skipOnVercel.js && tsx scripts/prewarmWeeklyReportCache.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
@@ -11,12 +10,12 @@
   "dependencies": {
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
-    "exceljs": "^4.4.0",
+    "exceljs": "^3.4.0",
     "file-saver": "^2.0.5",
     "google-auth-library": "^10.6.2",
     "googleapis": "^171.4.0",
     "lucide-react": "^1.14.0",
-    "next": "^15.5.18",
+    "next": "^16.2.7",
     "pg": "^8.20.0",
     "react": "^18.3.1",
     "react-chartjs-2": "^5.3.1",

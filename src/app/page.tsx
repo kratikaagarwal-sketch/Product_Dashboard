@@ -21,6 +21,8 @@ export default async function Home() {
     getAdsRunningRows(),
   ]);
 
+  // dashboard shell will handle the case when the data is not available and show skeletons
+
   return (
     <DashboardShell
       initialWeeklyReportData={initialWeeklyReportResponse.data}

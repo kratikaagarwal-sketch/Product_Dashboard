@@ -1,0 +1,27 @@
+
+> dashboard-app@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.18
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.29.92:3000
+
+ ✓ Starting...
+ ✓ Ready in 9.1s
+ ○ Compiling /api/daily-campaign ...
+ ✓ Compiled /api/daily-campaign in 6.2s (308 modules)
+ GET /api/daily-campaign?period=weekly&format=compact 200 in 8682ms
+ GET /api/daily-campaign?period=weekly 200 in 12583ms
+ GET /api/daily-campaign?period=weekly&format=compact 200 in 382ms
+ GET /api/daily-campaign?period=weekly 200 in 1523ms
+ ○ Compiling / ...
+ ✓ Compiled / in 16s (1129 modules)
+ GET / 200 in 22687ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 2.9s (708 modules)
+ GET /api/daily-campaign?period=weekly 500 in 3545ms
+ GET /api/daily-campaign?period=weekly&format=compact 500 in 1829ms
+ ✓ Compiled in 1087ms (400 modules)
+ ✓ Compiled in 183ms (400 modules)
+ ✓ Compiled in 339ms (400 modules)
+ ✓ Compiled in 349ms (400 modules)

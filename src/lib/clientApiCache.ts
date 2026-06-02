@@ -96,8 +96,13 @@ export const useCachedApiData = <T,>(
     const cached = initialData ?? getCachedApiData<T>(cacheKey);
 
     if (cached !== undefined) {
+      setCachedEntry(cacheKey, cached, ttlMs);
       setData(cached);
       setLoading(false);
+      setError(null);
+      return () => {
+        isActive = false;
+      };
     } else {
       setLoading(true);
     }

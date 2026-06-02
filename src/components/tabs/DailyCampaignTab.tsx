@@ -5,6 +5,11 @@ import * as XLSX from 'xlsx';
 import ChartComponent from '../ChartComponent';
 import SearchableSelect from '../SearchableSelect';
 import { useCachedApiData } from '@/lib/clientApiCache';
+import {
+  type CampaignRawRow,
+  type CompactCampaignRowsPayload,
+  decodeCampaignRowsResponse,
+} from '@/lib/campaignCompact';
 
 const C = { t: '#00cba4', b: '#4d9fff', g: '#3dd68c', r: '#ff6168', a: '#ffb547', p: '#a78bfa', d: '#4a6070' };
 
@@ -35,7 +40,12 @@ const METRICS = [
   { key: 'total_req_approved', label: 'Total Req Approved' }
 ];
 
-export default function DailyCampaignTab() {
+type DailyCampaignTabProps = {
+  initialData?: CompactCampaignRowsPayload;
+  initialAdsRunningData?: any[];
+};
+
+export default function DailyCampaignTab({ initialData, initialAdsRunningData }: DailyCampaignTabProps) {
   // Filters
   const [timePeriod, setTimePeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [selectedWeek, setSelectedWeek] = useState<string>('');
@@ -60,15 +70,26 @@ export default function DailyCampaignTab() {
   const [pmcatModalData, setPmcatModalData] = useState<any[]>([]);
   const [retryCount, setRetryCount] = useState(0);
   const syncTriggeredRef = useRef<string>('');
+  const initialCampaignResponse = timePeriod === 'weekly' && retryCount === 0 ? initialData : undefined;
   const {
-    data: campaignData,
+    data: campaignResponse,
     loading,
     error
-  } = useCachedApiData<any[]>(`daily-campaign:${timePeriod}:${retryCount}`, `/api/daily-campaign?period=${timePeriod}`, 5 * 60 * 1000);
+  } = useCachedApiData<CampaignRawRow[] | CompactCampaignRowsPayload>(
+    `daily-campaign:${timePeriod}:compact:${retryCount}`,
+    `/api/daily-campaign?period=${timePeriod}&format=compact`,
+    5 * 60 * 1000,
+    initialCampaignResponse
+  );
   const {
     data: adsRunningMcatsData,
     loading: adsRunningLoading
-  } = useCachedApiData<string[]>('ads-running-mcats', '/api/ads-running-mcats', 5 * 60 * 1000);
+  } = useCachedApiData<any[]>('ads-running-mcats', '/api/ads-running-mcats', 5 * 60 * 1000, initialAdsRunningData);
+
+  const campaignData = useMemo(
+    () => decodeCampaignRowsResponse(campaignResponse),
+    [campaignResponse]
+  );
 
   useEffect(() => {
     setPage(0);

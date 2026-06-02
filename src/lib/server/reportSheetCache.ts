@@ -8,6 +8,10 @@ import {
 } from './campaignData';
 import { getJsonCacheMeta, readJsonCache, writeJsonCache } from './jsonStore';
 import { WEEKLY_REPORT_METRICS } from '@/lib/weeklyReportMetrics';
+import {
+  type CompactCampaignRowsPayload,
+  encodeCompactCampaignRows,
+} from '@/lib/campaignCompact';
 
 const CACHE_FILES = {
   weeklyReport: 'weekly-report.json',
@@ -43,15 +47,50 @@ export const getWeeklyReportRows = async () => {
   return readOrFetchRows<any>(CACHE_FILES.weeklyReport, () => fetchWeeklyAggregatedStats('weekly'));
 };
 
-export const getCampaignRows = async (period: 'daily' | 'weekly' | 'monthly') => {
-  const fileName =
-    period === 'daily'
-      ? CACHE_FILES.campaignDaily
-      : period === 'weekly'
-        ? CACHE_FILES.campaignWeekly
-        : CACHE_FILES.campaignMonthly;
+const getCampaignCacheFileName = (period: 'daily' | 'weekly' | 'monthly') => {
+  return period === 'daily'
+    ? CACHE_FILES.campaignDaily
+    : period === 'weekly'
+      ? CACHE_FILES.campaignWeekly
+      : CACHE_FILES.campaignMonthly;
+};
 
+const getCompactCampaignCacheFileName = (period: 'daily' | 'weekly' | 'monthly') => {
+  return `compact/${getCampaignCacheFileName(period)}`;
+};
+
+export const getCampaignRows = async (period: 'daily' | 'weekly' | 'monthly') => {
+  const fileName = getCampaignCacheFileName(period);
   return readOrFetchRows<any>(fileName, () => fetchDailyCampaignData(period));
+};
+
+export const getCompactCampaignRows = async (
+  period: 'daily' | 'weekly' | 'monthly',
+): Promise<CompactCampaignRowsPayload> => {
+  const rawFileName = getCampaignCacheFileName(period);
+  const compactFileName = getCompactCampaignCacheFileName(period);
+  const rawMeta = await getJsonCacheMeta(rawFileName);
+  const cached = await readJsonCache<CompactCampaignRowsPayload>(compactFileName);
+
+  if (
+    cached?.format === 'compact-campaign-rows' &&
+    cached.source?.period === period &&
+    cached.source?.mtimeMs === (rawMeta?.mtimeMs ?? null) &&
+    cached.source?.size === (rawMeta?.size ?? null)
+  ) {
+    return cached;
+  }
+
+  const rows = await getCampaignRows(period);
+  const freshRawMeta = await getJsonCacheMeta(rawFileName);
+  const payload = encodeCompactCampaignRows(rows, {
+    period,
+    mtimeMs: freshRawMeta?.mtimeMs ?? null,
+    size: freshRawMeta?.size ?? null,
+  });
+
+  await writeJsonCache(compactFileName, payload);
+  return payload;
 };
 
 export const getAdsRunningRows = async () => {
@@ -67,14 +106,18 @@ export const syncWeeklyReportRows = async () => {
 
 export const syncCampaignRows = async (period: 'daily' | 'weekly' | 'monthly') => {
   const rows = await fetchDailyCampaignData(period);
-  const fileName =
-    period === 'daily'
-      ? CACHE_FILES.campaignDaily
-      : period === 'weekly'
-        ? CACHE_FILES.campaignWeekly
-        : CACHE_FILES.campaignMonthly;
+  const fileName = getCampaignCacheFileName(period);
 
   await writeJsonCache(fileName, rows);
+  const rawMeta = await getJsonCacheMeta(fileName);
+  await writeJsonCache(
+    getCompactCampaignCacheFileName(period),
+    encodeCompactCampaignRows(rows, {
+      period,
+      mtimeMs: rawMeta?.mtimeMs ?? null,
+      size: rawMeta?.size ?? null,
+    }),
+  );
   return rows.length;
 };
 

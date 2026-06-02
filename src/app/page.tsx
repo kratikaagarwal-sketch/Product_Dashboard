@@ -1,13 +1,31 @@
 import DashboardShell from '@/components/DashboardShell';
-import { getWeeklyReportResponse } from '@/lib/server/reportSheetCache';
+import {
+  getAdsRunningRows,
+  getCompactCampaignRows,
+  getWeeklyReportResponse,
+} from '@/lib/server/reportSheetCache';
 
 export default async function Home() {
-  const initialWeeklyReportResponse = await getWeeklyReportResponse({
-    granularity: 'group',
-    selectedGroup: 'all',
-    selectedPmcat: 'all',
-    selectedMcat: 'all',
-  });
+  const [
+    initialWeeklyReportResponse,
+    initialCampaignWeeklyData,
+    initialAdsRunningData,
+  ] = await Promise.all([
+    getWeeklyReportResponse({
+      granularity: 'group',
+      selectedGroup: 'all',
+      selectedPmcat: 'all',
+      selectedMcat: 'all',
+    }),
+    getCompactCampaignRows('weekly'),
+    getAdsRunningRows(),
+  ]);
 
-  return <DashboardShell initialWeeklyReportData={initialWeeklyReportResponse.data} />;
+  return (
+    <DashboardShell
+      initialWeeklyReportData={initialWeeklyReportResponse.data}
+      initialCampaignWeeklyData={initialCampaignWeeklyData}
+      initialAdsRunningData={initialAdsRunningData}
+    />
+  );
 }

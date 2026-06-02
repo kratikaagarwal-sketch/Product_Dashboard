@@ -58,11 +58,20 @@ export default function WeeklyReportTab({ initialData }: WeeklyReportTabProps) {
     return params.toString();
   }, [granularity, selectedGroup, selectedPmcat, selectedMcat]);
 
+  const initialWeeklyData =
+    granularity === 'group' &&
+    selectedGroup === 'all' &&
+    selectedPmcat === 'all' &&
+    selectedMcat === 'all' &&
+    retryCount === 0
+      ? initialData
+      : undefined;
+
   const { data, loading, error } = useCachedApiData<WeeklyReportResponse>(
     `weekly-report:${queryString}:${retryCount}`,
     `/api/weekly-report?${queryString}`,
     5 * 60 * 1000,
-    initialData
+    initialWeeklyData
   );
 
   const availableGroups = data?.availableGroups ?? [];

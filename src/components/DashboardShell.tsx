@@ -16,12 +16,20 @@ import WeeklyReportTab from "@/components/tabs/WeeklyReportTab";
 import { prefetchCachedApiData } from "@/lib/clientApiCache";
 
 type WeeklyReportResponse = React.ComponentProps<typeof WeeklyReportTab>['initialData'];
+type DailyCampaignInitialData = React.ComponentProps<typeof DailyCampaignTab>['initialData'];
+type DailyCampaignAdsRunningData = React.ComponentProps<typeof DailyCampaignTab>['initialAdsRunningData'];
 
 type DashboardShellProps = {
   initialWeeklyReportData?: NonNullable<WeeklyReportResponse>;
+  initialCampaignWeeklyData?: NonNullable<DailyCampaignInitialData>;
+  initialAdsRunningData?: NonNullable<DailyCampaignAdsRunningData>;
 };
 
-export default function DashboardShell({ initialWeeklyReportData }: DashboardShellProps) {
+export default function DashboardShell({
+  initialWeeklyReportData,
+  initialCampaignWeeklyData,
+  initialAdsRunningData,
+}: DashboardShellProps) {
   const [activeTab, setActiveTab] = useState("weekly_report");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [visitedTabs, setVisitedTabs] = useState<string[]>(["weekly_report"]);
@@ -54,9 +62,18 @@ export default function DashboardShell({ initialWeeklyReportData }: DashboardShe
   }, [activeTab]);
 
   useEffect(() => {
-    prefetchCachedApiData<any[]>(`daily-campaign:weekly:0`, `/api/daily-campaign?period=weekly`, 5 * 60 * 1000);
-    prefetchCachedApiData<any[]>('ads-running-mcats', '/api/ads-running-mcats', 5 * 60 * 1000);
-  }, []);
+    if (!initialCampaignWeeklyData) {
+      prefetchCachedApiData<any[]>(
+        `daily-campaign:weekly:compact:0`,
+        `/api/daily-campaign?period=weekly&format=compact`,
+        5 * 60 * 1000
+      );
+    }
+
+    if (!initialAdsRunningData) {
+      prefetchCachedApiData<any[]>('ads-running-mcats', '/api/ads-running-mcats', 5 * 60 * 1000);
+    }
+  }, [initialCampaignWeeklyData, initialAdsRunningData]);
 
   return (
     <div className="layout">
@@ -81,7 +98,10 @@ export default function DashboardShell({ initialWeeklyReportData }: DashboardShe
           {activeTab === "ai" && <AiInsightsTab />}
           {visitedTabs.includes("daily_campaign") && (
             <div style={{ display: activeTab === "daily_campaign" ? "block" : "none" }}>
-              <DailyCampaignTab />
+              <DailyCampaignTab
+                initialData={initialCampaignWeeklyData}
+                initialAdsRunningData={initialAdsRunningData}
+              />
             </div>
           )}
           {visitedTabs.includes("weekly_report") && (

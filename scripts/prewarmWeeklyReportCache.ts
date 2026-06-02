@@ -265,6 +265,12 @@ async function main() {
 }
 
 main().catch(error => {
+  // If the raw cache files haven't been generated yet (e.g. fresh Vercel build),
+  // skip pre-warming gracefully instead of failing the whole build.
+  if (error?.code === 'ENOENT') {
+    console.warn('Cache files not found – skipping weekly-report pre-warm:', error.message);
+    process.exit(0);
+  }
   console.error(error);
   process.exit(1);
 });

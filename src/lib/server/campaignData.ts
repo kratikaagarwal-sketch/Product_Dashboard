@@ -65,11 +65,11 @@ declare global {
 }
 
 const dailyCampaignPoolConfig = {
-  host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
-  user: 'rd_mktplace_pwrbi',
-  password: 'p83z28CjbMjA',
-  database: 'biredshiftdb',
-  port: 5439,
+  host: process.env.REDSHIFT_HOST || 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
+  user: process.env.REDSHIFT_USER || 'rd_mktplace_pwrbi',
+  password: process.env.REDSHIFT_PASSWORD,
+  database: process.env.REDSHIFT_DATABASE || 'biredshiftdb',
+  port: parseInt(process.env.REDSHIFT_PORT || '5439', 10),
   ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
@@ -77,11 +77,11 @@ const dailyCampaignPoolConfig = {
 };
 
 const adsRunningPoolConfig = {
-  host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
-  user: 'rd_sushmita_87494',
-  password: 'BWsxCY96G8',
-  database: 'biredshiftdb',
-  port: 5439,
+  host: process.env.REDSHIFT_HOST || 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
+  user: process.env.REDSHIFT_ADS_USER || 'rd_sushmita_87494',
+  password: process.env.REDSHIFT_ADS_PASSWORD,
+  database: process.env.REDSHIFT_DATABASE || 'biredshiftdb',
+  port: parseInt(process.env.REDSHIFT_PORT || '5439', 10),
   ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,

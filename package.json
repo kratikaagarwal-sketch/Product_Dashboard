@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prebuild": "npm exec --yes tsx scripts/prewarmWeeklyReportCache.ts",
+    "prebuild": "node -e \"if(process.env.VERCEL){process.exit(0)}\" || tsx scripts/prewarmWeeklyReportCache.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
@@ -29,6 +29,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

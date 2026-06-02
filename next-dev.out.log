@@ -19,3 +19,4 @@
  POST /api/report-sync 200 in 25618ms
  GET / 200 in 17408ms
  GET /favicon.ico 200 in 41ms
+[?25h

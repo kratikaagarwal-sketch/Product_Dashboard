@@ -1,0 +1,37 @@
+
+> dashboard-app@0.1.0 build
+> next build
+
+▲ Next.js 16.2.7 (Turbopack)
+- Environments: .env
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 7.6s
+  Running TypeScript ...
+  Finished TypeScript in 13.9s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/7) ...
+  Generating static pages using 7 workers (1/7) 
+  Generating static pages using 7 workers (3/7) 
+  Generating static pages using 7 workers (5/7) 
+✓ Generating static pages using 7 workers (7/7) in 7.3s
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/ads-running-mcats
+├ ƒ /api/campaign-daily
+├ ƒ /api/campaign-monthly
+├ ƒ /api/campaign-weekly
+├ ƒ /api/daily-campaign
+├ ƒ /api/dashboard-data
+├ ƒ /api/mcat-pause-data
+├ ƒ /api/mcat-weekly-performance
+├ ƒ /api/report-sync
+└ ƒ /api/weekly-report
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

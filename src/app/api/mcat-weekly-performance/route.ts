@@ -1,63 +1,19 @@
 import { NextResponse } from 'next/server';
-import { Pool } from 'pg';
 import fs from 'fs';
 import path from 'path';
+import { getRedshiftPool } from '@/lib/server/redshiftPool';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-declare global {
-  var pool: Pool | undefined;
-  var devPool: Pool | undefined;
-}
-
-const poolConfig = {
-  host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
-  user: 'rd_mktplace_pwrbi',
-  password: 'p83z28CjbMjA',
-  database: 'biredshiftdb',
-  port: 5439, // Default Redshift port
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-};
-
-const devPoolConfig = {
-  host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
-  user: 'rd_sushmita_87494',
-  password: 'BWsxCY96G8',
-  database: 'biredshiftdb',
-  port: 5439,
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-};
-
-let pool: Pool;
-let devPool: Pool;
-
-if (process.env.NODE_ENV === 'production') {
-  pool = new Pool(poolConfig);
-  devPool = new Pool(devPoolConfig);
-} else {
-  if (!globalThis.pool) {
-    globalThis.pool = new Pool(poolConfig);
-  }
-  if (!globalThis.devPool) {
-    globalThis.devPool = new Pool(devPoolConfig);
-  }
-  pool = globalThis.pool;
-  devPool = globalThis.devPool;
-}
-
-pool.on('error', (err) => {
-  console.error('Unexpected error on production pool idle client:', err);
+const getPool = () => getRedshiftPool({
+  globalKey: 'mcatWeeklyPool',
 });
 
-devPool.on('error', (err) => {
-  console.error('Unexpected error on development pool idle client:', err);
+const getDevPool = () => getRedshiftPool({
+  globalKey: 'mcatWeeklyDevPool',
+  userEnv: 'REDSHIFT_DEV_USER',
+  passwordEnv: 'REDSHIFT_DEV_PASSWORD',
 });
 
 function debugLog(msg: string) {
@@ -104,6 +60,8 @@ AND lower(a.iil_google_ads_lable_name) IN ('high', 'low', 'medium');
 export async function GET(request: Request) {
   debugLog('GET request received');
   try {
+    const pool = getPool();
+    const devPool = getDevPool();
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'weekly';
 

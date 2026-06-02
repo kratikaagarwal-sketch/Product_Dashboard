@@ -13,10 +13,21 @@ type CampaignPeriod = 'daily' | 'weekly' | 'monthly';
 
 export async function POST(request: Request) {
   try {
+    // If Redshift credentials are not configured, skip sync gracefully instead of failing/spamming console
+    if (!process.env.REDSHIFT_HOST || !process.env.REDSHIFT_PASSWORD) {
+      console.info('Sync skipped: REDSHIFT_HOST or REDSHIFT_PASSWORD env var is not configured.');
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: 'Sync skipped: Database credentials are not configured.'
+      });
+    }
+
     const body = await request.json().catch(() => ({} as Record<string, unknown>));
     const target = (body.target as SyncTarget) || 'all';
     const period = (body.period as CampaignPeriod) || 'weekly';
 
+    console.info(`[API/report-sync] Triggered sync target: "${target}" (period: "${period}")`);
     const results: Record<string, number> = {};
 
     if (target === 'all' || target === 'weekly-report') {
@@ -31,6 +42,7 @@ export async function POST(request: Request) {
       results.adsRunning = await syncAdsRunningRows();
     }
 
+    console.info('[API/report-sync] Sync completed successfully:', results);
     return NextResponse.json({ success: true, data: results });
   } catch (error: any) {
     console.error('Error in report-sync route:', error);

@@ -98,32 +98,45 @@ export const getAdsRunningRows = async () => {
 };
 
 export const syncWeeklyReportRows = async () => {
+  console.info('[Sync] Starting sync: Weekly Report...');
   const rows = await fetchWeeklyAggregatedStats('weekly');
+  console.info(`[Sync] Stats retrieved successfully. Writing ${rows.length} rows to cache: ${CACHE_FILES.weeklyReport}`);
   await writeJsonCache(CACHE_FILES.weeklyReport, rows);
+  console.info('[Sync] Warming weekly report response cache...');
   await warmWeeklyReportResponseCache(rows);
+  console.info('[Sync] Sync complete: Weekly Report.');
   return rows.length;
 };
 
 export const syncCampaignRows = async (period: 'daily' | 'weekly' | 'monthly') => {
+  console.info(`[Sync] Starting sync: Campaign data (period: ${period})...`);
   const rows = await fetchDailyCampaignData(period);
   const fileName = getCampaignCacheFileName(period);
 
+  console.info(`[Sync] Campaign data retrieved. Writing raw rows to cache: ${fileName}`);
   await writeJsonCache(fileName, rows);
   const rawMeta = await getJsonCacheMeta(fileName);
+
+  const compactFileName = getCompactCampaignCacheFileName(period);
+  console.info(`[Sync] Encoding and writing compact campaign data to cache: ${compactFileName}`);
   await writeJsonCache(
-    getCompactCampaignCacheFileName(period),
+    compactFileName,
     encodeCompactCampaignRows(rows, {
       period,
       mtimeMs: rawMeta?.mtimeMs ?? null,
       size: rawMeta?.size ?? null,
     }),
   );
+  console.info(`[Sync] Sync complete: Campaign data (period: ${period}).`);
   return rows.length;
 };
 
 export const syncAdsRunningRows = async () => {
+  console.info('[Sync] Starting sync: Ads Running MCATs...');
   const rows = await fetchAdsRunningMcatsEnriched();
+  console.info(`[Sync] Ads Running stats retrieved. Writing ${rows.length} rows to cache: ${CACHE_FILES.adsRunning}`);
   await writeJsonCache(CACHE_FILES.adsRunning, rows);
+  console.info('[Sync] Sync complete: Ads Running MCATs.');
   return rows.length;
 };
 
@@ -465,7 +478,9 @@ export const getWeeklyReportResponse = async (query: WeeklyReportQuery) => {
 };
 
 const warmWeeklyReportResponseCache = async (rows: any[]) => {
+  console.info('[Sync] Warming DEFAULT weekly report response cache...');
   const response = await buildWeeklyReportResponse(DEFAULT_WEEKLY_REPORT_QUERY, rows);
   const cacheFileName = await getWeeklyReportResponseCacheFileName(DEFAULT_WEEKLY_REPORT_QUERY);
   await writeJsonCache(cacheFileName, response);
+  console.info(`[Sync] Cache warmed and written to: ${cacheFileName}`);
 };

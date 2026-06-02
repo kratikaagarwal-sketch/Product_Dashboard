@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prebuild": "node -e \"if(process.env.VERCEL){process.exit(0)}\" || tsx scripts/prewarmWeeklyReportCache.ts",
+    "prebuild": "node scripts/skipOnVercel.js && tsx scripts/prewarmWeeklyReportCache.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"

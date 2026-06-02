@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
-import { Pool } from 'pg';
+import { getRedshiftPool } from '@/lib/server/redshiftPool';
 
-const pool = new Pool({
-  host: 'bi-dwh-redshift-production.c98rtyhhgrpm.ap-south-1.redshift.amazonaws.com',
-  user: 'rd_mktplace_pwrbi',
-  password: 'p83z28CjbMjA',
-  database: 'biredshiftdb',
-  port: 5439, // Default Redshift port
-  ssl: { rejectUnauthorized: false }
+const getPool = () => getRedshiftPool({
+  globalKey: 'campaignMonthlyPool',
 });
 
 const query1 = `
@@ -179,6 +174,7 @@ ORDER BY gl.glcat_grp_name;
 
 export async function GET() {
   try {
+    const pool = getPool();
     const [res1, res2] = await Promise.all([
       pool.query(query1),
       pool.query(query2)
